@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "python.pythonPath": "${workspaceFolder}/.venv/bin/python",
+    "configurations": [
+      {
+        "name": "FastAPI",
+        "type": "python",
+        "request": "launch",
+        "module": "uvicorn",
+        "args": [
+          "main:app",  // Replace with the path to your FastAPI app
+          "--reload"
+        ],
+        "jinja": true,
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}"
+        }
+      }
+    ]
+  }
+  

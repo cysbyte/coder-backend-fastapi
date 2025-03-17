@@ -1,0 +1,13 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environment
+venv/
+.env
+.env.*
+*.venv
+pip-log.txt
+pip-delete-this-directory.txt
+ocr-service-account.json
