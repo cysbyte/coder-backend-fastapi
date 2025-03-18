@@ -25,15 +25,3 @@ async def upload_to_storage(file_content: bytes, file_name: str, content_type: s
             "error": str(e)
         }
 
-async def save_image_record(image_data: dict):
-    try:
-        response = supabase.table('images').insert(image_data).execute()
-        return {
-            "success": True,
-            "data": response.data[0]
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        } 

@@ -17,7 +17,7 @@ import io as python_io
 from openai import OpenAI
 from services.ocr_service import ocr_parse, ocr_parse_space, ocr_parse_with_fallback, ocr_parse_mock
 from services.ai_service import process_with_openai, process_with_openai_mock
-from services.storage_service import upload_to_storage, save_image_record
+from services.storage_service import upload_to_storage
 from utils.supabase_client import supabase
 from services.websocket_service import manager
 from services.task_processor import process_image_task
