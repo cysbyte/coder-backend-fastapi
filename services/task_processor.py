@@ -14,7 +14,7 @@ async def process_image_task(task_id: str, image_content: bytes):
 
         # OCR Processing
         await manager.send_message(task_id, {
-            "status": "processing",
+            "status": "ocr processing",
             "step": "ocr",
             "message": "Performing OCR analysis"
         })
@@ -23,15 +23,24 @@ async def process_image_task(task_id: str, image_content: bytes):
         
         if not ocr_result["success"]:
             await manager.send_message(task_id, {
-                "status": "error",
+                "status": "orc error",
                 "step": "ocr",
                 "message": ocr_result.get("error", "OCR processing failed")
             })
             return
+        
+        await manager.send_message(task_id, {
+            "status": "ocr completed",
+            "step": "ocr",
+            "message": "OCR analysis completed",
+            "data": {
+                "ocr_text": ocr_result["text"]
+            }
+        })
 
         # AI Analysis
         await manager.send_message(task_id, {
-            "status": "processing",
+            "status": "ai processing",
             "step": "ai",
             "message": "Performing AI analysis"
         })
@@ -40,7 +49,7 @@ async def process_image_task(task_id: str, image_content: bytes):
         
         if not ai_result["success"]:
             await manager.send_message(task_id, {
-                "status": "error",
+                "status": "ai error",
                 "step": "ai",
                 "message": ai_result.get("error", "AI analysis failed")
             })
@@ -48,7 +57,9 @@ async def process_image_task(task_id: str, image_content: bytes):
 
         # Send completion message
         await manager.send_message(task_id, {
-            "status": "completed",
+            "status": "ai completed",
+            "step": "ai",
+            "message": "AI analysis completed",
             "data": {
                 "ocr_text": ocr_result["text"],
                 "ai_analysis": ai_result["analysis"]

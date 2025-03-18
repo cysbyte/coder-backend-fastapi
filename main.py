@@ -33,10 +33,11 @@ app = FastAPI()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], 
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"], 
     allow_headers=["*"], 
+
 )
 
 # Add this class for request validation
@@ -113,9 +114,11 @@ def get_user():
 async def websocket_endpoint(websocket: WebSocket, task_id: str):
     try:
         await manager.connect(websocket, task_id)
+        # await websocket.accept()
         while True:
             # Keep connection alive and wait for messages
             data = await websocket.receive_text()
+            print(data)
     except WebSocketDisconnect:
         await manager.disconnect(websocket, task_id)
 
