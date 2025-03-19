@@ -1,5 +1,5 @@
 from typing import Union, Optional
-from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect, Header, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect, Header, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -128,25 +128,12 @@ async def upload_image(
     file: UploadFile = File(...),
     title: str = Form(None),
     description: str = Form(None),
-    authorization: Optional[str] = Header(None)
+    authorization: Optional[str] = Header(None),
+    response: Response = None
 ):
     try:
         # First validate the access token
-        auth_result = await validate_access_token(authorization)
-        
-        # Check if we got a refreshed token
-        if isinstance(auth_result, dict) and auth_result.get("token_refreshed"):
-            user = auth_result["user"]
-            # Return early with new tokens if the client needs to retry with new token
-            return {
-                "success": False,
-                "needs_token_refresh": True,
-                "new_access_token": auth_result["new_access_token"],
-                "new_refresh_token": auth_result["new_refresh_token"],
-                "message": "Token refreshed, please retry with new token"
-            }
-        else:
-            user = auth_result
+        user, token_refreshed = await validate_access_token(authorization, response)
 
         # Validate file type
         if not file.content_type.startswith('image/'):
@@ -172,7 +159,7 @@ async def upload_image(
         # Create async task with user information
         asyncio.create_task(process_image_task(
             task_id=task_id,
-            image_content=content,
+            image_content=content
         ))
         
         # Return task ID immediately
@@ -183,11 +170,11 @@ async def upload_image(
             "user": {
                 "id": user.id,
                 "email": user.email
-            }
+            },
+            "token_refreshed": token_refreshed
         }
         
     except HTTPException as he:
-        # Re-raise HTTP exceptions to maintain their status codes
         raise he
     except Exception as e:
         # For unexpected errors, return 500

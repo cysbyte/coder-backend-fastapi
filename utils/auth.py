@@ -1,8 +1,9 @@
-from typing import Optional
-from fastapi import Header, HTTPException
+from typing import Optional, Tuple
+from fastapi import Header, HTTPException, Response
 from utils.supabase_client import supabase
+from fastapi.responses import JSONResponse
 
-async def validate_access_token(authorization: Optional[str] = Header(None)):
+async def validate_access_token(authorization: Optional[str] = Header(None), response: Response = None) -> Tuple[dict, bool]:
     if not authorization:
         raise HTTPException(status_code=401, detail="Authorization header is missing")
     
@@ -17,7 +18,7 @@ async def validate_access_token(authorization: Optional[str] = Header(None)):
         try:
             # First try to validate the token
             user = supabase.auth.get_user(token)
-            return user.user
+            return user.user, False  # Second value indicates if token was refreshed
         except Exception as token_error:
             # If token validation fails, try to refresh it
             try:
@@ -36,16 +37,15 @@ async def validate_access_token(authorization: Optional[str] = Header(None)):
                 if not refresh_response or not refresh_response.user:
                     raise HTTPException(status_code=401, detail="Failed to refresh token")
                 
-                # Return both the new token and user info
-                return {
-                    "user": refresh_response.user,
-                    "new_access_token": refresh_response.session.access_token,
-                    "new_refresh_token": refresh_response.session.refresh_token,
-                    "token_refreshed": True
-                }
+                # Set the new tokens in response headers
+                if response:
+                    response.headers["New-Access-Token"] = refresh_response.session.access_token
+                    response.headers["New-Refresh-Token"] = refresh_response.session.refresh_token
+                
+                return refresh_response.user, True  # Second value indicates token was refreshed
                 
             except Exception as refresh_error:
-                raise HTTPException(status_code=401, detail="Token expired and refresh failed")
+                raise HTTPException(status_code=401, detail="Token validation failed or refresh failed")
         
     except HTTPException as he:
         raise he
