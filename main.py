@@ -1,5 +1,5 @@
-from typing import Union
-from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect
+from typing import Union, Optional
+from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -21,7 +21,7 @@ from services.storage_service import upload_to_storage
 from utils.supabase_client import supabase
 from services.websocket_service import manager
 from services.task_processor import process_image_task
-
+from utils.auth import validate_access_token
 load_dotenv()
 
 url: str = os.environ.get("SUPABASE_URL")
@@ -122,30 +122,76 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
     except WebSocketDisconnect:
         await manager.disconnect(websocket, task_id)
 
+
 @app.post("/upload/image")
 async def upload_image(
     file: UploadFile = File(...),
     title: str = Form(None),
-    description: str = Form(None)
+    description: str = Form(None),
+    authorization: Optional[str] = Header(None)
 ):
     try:
+        # First validate the access token
+        auth_result = await validate_access_token(authorization)
+        
+        # Check if we got a refreshed token
+        if isinstance(auth_result, dict) and auth_result.get("token_refreshed"):
+            user = auth_result["user"]
+            # Return early with new tokens if the client needs to retry with new token
+            return {
+                "success": False,
+                "needs_token_refresh": True,
+                "new_access_token": auth_result["new_access_token"],
+                "new_refresh_token": auth_result["new_refresh_token"],
+                "message": "Token refreshed, please retry with new token"
+            }
+        else:
+            user = auth_result
+
+        # Validate file type
+        if not file.content_type.startswith('image/'):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid file type. Only images are allowed."
+            )
+
+        # Read file content
         content = await file.read()
+        
+        # Validate file size (e.g., 10MB limit)
+        max_size = 10 * 1024 * 1024  # 10MB in bytes
+        if len(content) > max_size:
+            raise HTTPException(
+                status_code=400,
+                detail="File size exceeds maximum limit of 10MB"
+            )
         
         # Generate task ID
         task_id = str(uuid.uuid4())
         
-        # Create async task
-        asyncio.create_task(process_image_task(task_id, content))
+        # Create async task with user information
+        asyncio.create_task(process_image_task(
+            task_id=task_id,
+            image_content=content,
+        ))
         
         # Return task ID immediately
         return {
             "success": True,
             "task_id": task_id,
-            "message": "Processing started"
+            "message": "Processing started",
+            "user": {
+                "id": user.id,
+                "email": user.email
+            }
         }
         
+    except HTTPException as he:
+        # Re-raise HTTP exceptions to maintain their status codes
+        raise he
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        # For unexpected errors, return 500
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )

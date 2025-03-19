@@ -13,8 +13,8 @@ async def process_image_task(task_id: str, image_content: bytes):
         # First, upload image to Supabase storage
         storage_result = await upload_to_storage(
             file_content=image_content,
-            file_name=f"{task_id}.png",  # You might want to get the actual file extension
-            content_type="image/png"     # You might want to get the actual content type
+            file_name=f"{task_id}.png",  
+            content_type="image/png"    
         )
 
         if not storage_result["success"]:
