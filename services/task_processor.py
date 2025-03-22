@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 
 
-async def process_image_task(task_id: str, image_content: bytes):
+async def process_image_task(task_id: str, image_content: bytes, user_id: str):
     try:
         # First, upload image to Supabase storage
         storage_result = await upload_to_storage(
@@ -27,7 +27,9 @@ async def process_image_task(task_id: str, image_content: bytes):
         # Create initial record in Supabase
         initial_record = {
             "task_id": task_id,
-            "file_url": storage_result["file_url"],
+            "image_url": storage_result["file_url"],
+            "user_id": user_id,
+            "file_type": "image/png"
         }
 
         save_result = await save_image_record(initial_record)
@@ -71,7 +73,7 @@ async def process_image_task(task_id: str, image_content: bytes):
         # Update record with OCR results
         await update_record_status(save_result["data"]["id"], {
             "ocr_text": ocr_result["text"],
-
+            "ocr_service": "mock"
         })
 
         await manager.send_message(task_id, {
@@ -109,6 +111,7 @@ async def process_image_task(task_id: str, image_content: bytes):
         # Update record with AI results
         await update_record_status(save_result["data"]["id"], {
             "ai_analysis": ai_result["analysis"],
+            "ai_service": "mock"
         })
 
         # Send completion message

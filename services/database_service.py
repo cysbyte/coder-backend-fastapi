@@ -11,7 +11,7 @@ supabase: Client = create_client(url, key)
 async def update_record_status(record_id: str, update_data: dict):
     """Helper function to update record status in Supabase"""
     try:
-        response = supabase.table('images').update(update_data).eq('id', record_id).execute()
+        response = supabase.table('tasks').update(update_data).eq('id', record_id).execute()
         return {
             "success": True,
             "data": response.data[0]
@@ -24,7 +24,7 @@ async def update_record_status(record_id: str, update_data: dict):
     
 async def save_image_record(image_data: dict):
     try:
-        response = supabase.table('images').insert(image_data).execute()
+        response = supabase.table('tasks').insert(image_data).execute()
         return {
             "success": True,
             "data": response.data[0]

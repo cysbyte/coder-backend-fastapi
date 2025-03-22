@@ -38,6 +38,7 @@ mdurl==0.1.2
 multidict==6.2.0
 openai==1.66.3
 packaging==24.2
+pillow==11.1.0
 postgrest==0.19.3
 propcache==0.3.0
 proto-plus==1.26.1

@@ -95,6 +95,7 @@ async def login(request: SignInRequest):
                 "auth": user,
                 "user_record": user_query.data[0]
             }
+            o3-miini-high
             
         return user
     except Exception as e:
@@ -129,7 +130,8 @@ async def upload_image(
     title: str = Form(None),
     description: str = Form(None),
     authorization: Optional[str] = Header(None),
-    response: Response = None
+    response: Response = None,
+    user_id: str = Form(None)
 ):
     try:
         # First validate the access token
@@ -159,7 +161,8 @@ async def upload_image(
         # Create async task with user information
         asyncio.create_task(process_image_task(
             task_id=task_id,
-            image_content=content
+            image_content=content,
+            user_id=user_id
         ))
         
         # Return task ID immediately
