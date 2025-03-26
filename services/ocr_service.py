@@ -10,16 +10,39 @@ import asyncio
 
 # Add these at the top of the file
 MOCK_RESPONSES = {
-    "leetcode": """
-    1431. Kids With the Greatest Number of Candies
-    
-    There are n kids with candies. You are given an integer array candies, where each candies[i] represents the number of candies the ith kid has, and an integer extraCandies, denoting the number of extra candies that you have.
+    "leetcode": [
+        """
+        1431. Kids With the Greatest Number of Candies
+        
+        There are n kids with candies. You are given an integer array candies, where each candies[i] represents the number of candies the ith kid has, and an integer extraCandies, denoting the number of extra candies that you have.
 
-    Return a boolean array result of length n, where result[i] is true if, after giving the ith kid all the extraCandies, they will have the greatest number of candies among all the kids, or false otherwise.
+        Return a boolean array result of length n, where result[i] is true if, after giving the ith kid all the extraCandies, they will have the greatest number of candies among all the kids, or false otherwise.
 
-    Note that multiple kids can have the greatest number of candies.
-    
-    """
+        Note that multiple kids can have the greatest number of candies.
+        """,
+        """
+        1. Two Sum
+        
+        Given an array of integers nums and an integer target, return indices of the two numbers in nums such that they add up to target.
+        
+        You may assume that each input would have exactly one solution, and you may not use the same element twice.
+        
+        You can return the answer in any order.
+        """,
+        """
+        2. Add Two Numbers
+        
+        You are given two non-empty linked lists representing two non-negative integers. The digits are stored in reverse order, and each of their nodes contains a single digit. Add the two numbers and return the sum as a linked list.
+        
+        You may assume the two numbers do not contain any leading zero, except the number 0 itself.
+        """
+    ],
+    "system_design": [
+        "Design a distributed cache system",
+        "Design a real-time chat application",
+        "Design a URL shortening service"
+    ],
+    "error": None
 }
 
 async def ocr_parse(image_content: bytes) -> str:
@@ -37,13 +60,24 @@ async def ocr_parse(image_content: bytes) -> str:
         if texts and texts[0].description.strip():
             # Get the full text from the first annotation
             full_text = texts[0].description
-            return full_text
+            return {
+                "success": True,
+                "text": full_text
+            }
         
-        return ""
+        return {
+            "success": False,
+            "error": "No text found",
+            "text": ""
+        }
 
     except Exception as e:
         print(f"OCR Error: {str(e)}")
-        return ""
+        return {
+            "success": False,
+            "error": str(e),
+            "text": ""
+        }
 
 async def ocr_parse_space(image_content: bytes, content_type: str = None, filename: str = None) -> dict:
     """
@@ -165,19 +199,19 @@ async def ocr_parse_with_fallback(
             "error": str(e)
         }
 
-async def ocr_parse_mock(image_content: bytes, mock_type: str = "leetcode") -> dict:
+async def ocr_parse_mock(images: list[dict], mock_type: str = "leetcode") -> dict:
     """
-    Mock OCR function with different response types
+    Mock OCR function that processes multiple images and returns mock texts
     Args:
-        image_content: The image content (not used in mock)
+        images: List of dicts containing image content and filename
         mock_type: Type of mock response to return
     """
     try:
         # Simulate processing time
-        await asyncio.sleep(5)
+        await asyncio.sleep(2)
         
-        # Get mock text based on type
-        mock_text = MOCK_RESPONSES.get(mock_type)
+        # Get mock texts based on type
+        mock_texts = MOCK_RESPONSES.get(mock_type, MOCK_RESPONSES["leetcode"])
         
         # Simulate error if mock_type is "error"
         if mock_type == "error":
@@ -186,18 +220,25 @@ async def ocr_parse_mock(image_content: bytes, mock_type: str = "leetcode") -> d
                 "error": "Simulated OCR error"
             }
         
-        # Return empty result if mock_type is "empty"
+        # Return empty results if mock_type is "empty"
         if mock_type == "empty":
             return {
                 "success": True,
-                "text": "",
+                "texts": [""] * len(images),
                 "service": "mock_ocr",
                 "confidence": 0
             }
         
+        # Ensure we have enough mock texts
+        while len(mock_texts) < len(images):
+            mock_texts.extend(mock_texts)
+        
+        # Take only the number of texts we need
+        mock_texts = mock_texts[:len(images)]
+        
         return {
             "success": True,
-            "text": mock_text.strip(),
+            "texts": mock_texts,
             "service": "mock_ocr",
             "confidence": 99.9,
             "mock_type": mock_type

@@ -12,24 +12,20 @@ async def validate_access_token(authorization: Optional[str] = Header(None), res
         if not authorization.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Invalid authorization header format")
         
+        tokens = authorization.replace("Bearer ", "").split(',')
+        if len(tokens) != 2:
+            raise HTTPException(status_code=401, detail="Invalid token format")
         # Extract the token
-        token = authorization.replace("Bearer ", "")
+        access_token = tokens[0]
+        refresh_token = tokens[1]
         
         try:
             # First try to validate the token
-            user = supabase.auth.get_user(token)
+            user = supabase.auth.get_user(access_token)
             return user.user, False  # Second value indicates if token was refreshed
         except Exception as token_error:
             # If token validation fails, try to refresh it
             try:
-                # Get refresh token from the Authorization header
-                # Format should be: "Bearer access_token,refresh_token"
-                tokens = token.split(',')
-                if len(tokens) != 2:
-                    raise HTTPException(status_code=401, detail="Invalid token format")
-                
-                access_token = tokens[0]
-                refresh_token = tokens[1]
 
                 # Try to refresh the session
                 refresh_response = supabase.auth.refresh_session(refresh_token)

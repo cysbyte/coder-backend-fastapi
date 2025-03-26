@@ -8,28 +8,53 @@ import uuid
 from datetime import datetime
 
 
-async def process_image_task(task_id: str, image_content: bytes, user_id: str):
+async def process_image_task(
+    task_id: str,
+    images: list[dict],  # List of dicts containing image_content and filename
+    user_id: str
+):
     try:
-        # First, upload image to Supabase storage
-        storage_result = await upload_to_storage(
-            file_content=image_content,
-            file_name=f"{task_id}.png",  
-            content_type="image/png"    
-        )
+        # Send start message
+        await manager.send_message(task_id, {
+            "status": "started",
+            "message": f"Starting processing for {len(images)} images"
+        })
 
-        if not storage_result["success"]:
+        # Upload all images to storage first
+        storage_results = []
+        for index, image in enumerate(images):
             await manager.send_message(task_id, {
-                "status": "storage error",
-                "message": f"Failed to upload image: {storage_result.get('error', 'Unknown error')}"
+                "status": "uploading",
+                "message": f"Uploading image {index + 1} of {len(images)}",
+                "current_image": index + 1,
+                "total_images": len(images)
             })
-            return
 
-        # Create initial record in Supabase
+            storage_result = await upload_to_storage(
+                file_content=image["content"],
+                file_name=image["filename"],
+                content_type="image/png"    
+            )
+
+            if not storage_result["success"]:
+                await manager.send_message(task_id, {
+                    "status": "storage error",
+                    "message": f"Failed to upload image {image['filename']}: {storage_result.get('error', 'Unknown error')}",
+                    "current_image": index + 1,
+                    "total_images": len(images)
+                })
+                continue
+
+            storage_results.append(storage_result)
+
+        # Create a single record with arrays of URLs and filenames
         initial_record = {
             "task_id": task_id,
-            "image_url": storage_result["file_url"],
+            "image_urls": [result["file_url"] for result in storage_results],
+            "file_names": [image["filename"] for image in images],
             "user_id": user_id,
-            "file_type": "image/png"
+            "file_type": "image/png",
+            "total_images": len(images)
         }
 
         save_result = await save_image_record(initial_record)
@@ -41,98 +66,103 @@ async def process_image_task(task_id: str, image_content: bytes, user_id: str):
             })
             return
 
-        # Send start message
-        await manager.send_message(task_id, {
-            "status": "started",
-            "message": "Starting image processing"
-        })
+        record = save_result["data"]
 
-        # OCR Processing
+        # OCR Processing for all images
         await manager.send_message(task_id, {
             "status": "ocr processing",
             "step": "ocr",
-            "message": "Performing OCR analysis"
+            "message": "Performing OCR analysis for all images",
+            "total_images": len(images)
         })
         
-        ocr_result = await ocr_parse_mock(image_content)
+        ocr_result = await ocr_parse_mock(images)
         
         if not ocr_result["success"]:
-            # Update record with OCR error
-            await update_record_status(save_result["data"]["id"], {
-                "status": "ocr_error",
-                "ocr_error": ocr_result.get("error", "OCR processing failed")
-            })
-            
             await manager.send_message(task_id, {
                 "status": "ocr error",
                 "step": "ocr",
                 "message": ocr_result.get("error", "OCR processing failed")
             })
             return
-        
+
         # Update record with OCR results
-        await update_record_status(save_result["data"]["id"], {
-            "ocr_text": ocr_result["text"],
+        await update_record_status(record["id"], {
+            "ocr_texts": ocr_result["texts"],
             "ocr_service": "mock"
         })
 
         await manager.send_message(task_id, {
             "status": "ocr completed",
             "step": "ocr",
-            "message": "OCR analysis completed",
+            "message": "OCR analysis completed for all images",
             "data": {
-                "ocr_text": ocr_result["text"]
+                "texts": ocr_result["texts"]
             }
         })
 
-        # AI Analysis
+        # AI Analysis for all texts
         await manager.send_message(task_id, {
             "status": "ai processing",
             "step": "ai",
-            "message": "Performing AI analysis"
+            "message": "Performing AI analysis for all images",
+            "total_images": len(images)
         })
         
-        ai_result = await process_with_openai_mock(ocr_result["text"])
-        
-        if not ai_result["success"]:
-            # Update record with AI error
-            await update_record_status(save_result["data"]["id"], {
-                "status": "ai_error",
-                "ai_error": ai_result.get("error", "AI analysis failed")
-            })
+        results = []
+        ai_analyses = []
+        for index, text in enumerate(ocr_result["texts"]):
+            ai_result = await process_with_openai_mock(text)
             
-            await manager.send_message(task_id, {
-                "status": "ai error",
-                "step": "ai",
-                "message": ai_result.get("error", "AI analysis failed")
+            if not ai_result["success"]:
+                await update_record_status(record["id"], {
+                    "status": "ai_error",
+                    "ai_error": f"Failed for image {index + 1}: {ai_result.get('error', 'AI analysis failed')}"
+                })
+                
+                await manager.send_message(task_id, {
+                    "status": "ai error",
+                    "step": "ai",
+                    "message": f"AI analysis failed for image {index + 1}: {ai_result.get('error', 'AI analysis failed')}",
+                    "current_image": index + 1,
+                    "total_images": len(images)
+                })
+                continue
+
+            # Add result to lists
+            results.append({
+                "filename": images[index]["filename"],
+                "ocr_text": text,
+                "ai_analysis": ai_result["analysis"]
             })
-            return
+            ai_analyses.append(ai_result["analysis"])
+
+            await manager.send_message(task_id, {
+                "status": "image completed",
+                "step": "ai",
+                "message": f"Completed processing image {index + 1}",
+                "data": {
+                    "ocr_text": text,
+                    "ai_analysis": ai_result["analysis"]
+                },
+                "current_image": index + 1,
+                "total_images": len(images)
+            })
 
         # Update record with AI results
-        await update_record_status(save_result["data"]["id"], {
-            "ai_analysis": ai_result["analysis"],
+        await update_record_status(record["id"], {
+            "ai_analyses": ai_analyses,
             "ai_service": "mock"
         })
 
-        # Send completion message
+        # Send final completion message
         await manager.send_message(task_id, {
             "status": "completed",
-            "step": "ai",
-            "message": "AI analysis completed",
-            "data": {
-                "ocr_text": ocr_result["text"],
-                "ai_analysis": ai_result["analysis"]
-            }
+            "message": f"Completed processing all {len(images)} images",
+            "results": results
         })
 
     except Exception as e:
-        # Update record with general error
-        if 'save_result' in locals():
-            await update_record_status(save_result["data"]["id"], {
-                "status": "error",
-                "error_message": str(e)
-            })
-        
         await manager.send_message(task_id, {
             "status": "error",
             "message": str(e)

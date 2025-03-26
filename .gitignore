@@ -10,4 +10,4 @@ venv/
 *.venv
 pip-log.txt
 pip-delete-this-directory.txt
-ocr-service-account.json
+ocr-service-account*.json

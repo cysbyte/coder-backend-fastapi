@@ -95,7 +95,7 @@ async def login(request: SignInRequest):
                 "auth": user,
                 "user_record": user_query.data[0]
             }
-            o3-miini-high
+            # o3-miini-high
             
         return user
     except Exception as e:
@@ -126,50 +126,73 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
 
 @app.post("/upload/image")
 async def upload_image(
-    file: UploadFile = File(...),
-    title: str = Form(None),
-    description: str = Form(None),
-    authorization: Optional[str] = Header(None),
+    files: list[UploadFile] = File(..., description="List of image files to upload"),
+    title: str = Form(None, description="Optional title for the batch of images"),
+    description: str = Form(None, description="Optional description for the batch of images"),
+    authorization: Optional[str] = Header(None, description="Bearer token for authentication"),
     response: Response = None,
-    user_id: str = Form(None)
+    user_id: str = Form(..., description="User ID of the uploader")
 ):
     try:
+        # Validate files parameter
+        if not files:
+            raise HTTPException(
+                status_code=400,
+                detail="No files provided in the request"
+            )
+
+        # Validate number of files
+        if len(files) > 3:
+            raise HTTPException(
+                status_code=400,
+                detail="Maximum 3 images allowed per request"
+            )
+
         # First validate the access token
         user, token_refreshed = await validate_access_token(authorization, response)
 
-        # Validate file type
-        if not file.content_type.startswith('image/'):
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid file type. Only images are allowed."
-            )
-
-        # Read file content
-        content = await file.read()
-        
-        # Validate file size (e.g., 10MB limit)
-        max_size = 10 * 1024 * 1024  # 10MB in bytes
-        if len(content) > max_size:
-            raise HTTPException(
-                status_code=400,
-                detail="File size exceeds maximum limit of 10MB"
-            )
-        
         # Generate task ID
         task_id = str(uuid.uuid4())
         
-        # Create async task with user information
+        # Prepare images for processing
+        images = []
+        for file in files:
+            # Validate file type
+            if not file.content_type.startswith('image/'):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid file type for {file.filename}. Only images are allowed."
+                )
+
+            # Read file content
+            content = await file.read()
+            
+            # Validate file size (e.g., 10MB limit)
+            max_size = 10 * 1024 * 1024  # 10MB in bytes
+            if len(content) > max_size:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File size exceeds maximum limit of 10MB for {file.filename}"
+                )
+            
+            # Add image to list
+            images.append({
+                "content": content,
+                "filename": file.filename
+            })
+        
+        # Create async task with all images
         asyncio.create_task(process_image_task(
             task_id=task_id,
-            image_content=content,
+            images=images,
             user_id=user_id
         ))
         
-        # Return task ID immediately
+        # Return task information
         return {
             "success": True,
             "task_id": task_id,
-            "message": "Processing started",
+            "message": f"Processing started for {len(images)} image(s)",
             "user": {
                 "id": user.id,
                 "email": user.email
