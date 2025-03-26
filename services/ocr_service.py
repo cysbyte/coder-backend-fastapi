@@ -45,30 +45,44 @@ MOCK_RESPONSES = {
     "error": None
 }
 
-async def ocr_parse(image_content: bytes) -> str:
+async def ocr_parse(images: list[dict]) -> dict:
+    """
+    Process multiple images using Google Cloud Vision OCR
+    Args:
+        images: List of dicts containing image content and filename
+    Returns:
+        dict containing success status, array of texts, and service info
+    """
     try:
         # Create a client
         client = vision.ImageAnnotatorClient.from_service_account_json('ocr-service-account.json')
+        
+        texts = []
+        for image in images:
+            # Create image object
+            image_obj = vision.Image(content=image["content"])
 
-        # Create image object
-        image = vision.Image(content=image_content)
+            # Perform text detection
+            response = client.text_detection(image=image_obj)
+            text_annotations = response.text_annotations
 
-        # Perform text detection
-        response = client.text_detection(image=image)
-        texts = response.text_annotations
-
-        if texts and texts[0].description.strip():
-            # Get the full text from the first annotation
-            full_text = texts[0].description
+            if text_annotations and text_annotations[0].description.strip():
+                # Get the full text from the first annotation
+                texts.append(text_annotations[0].description)
+            else:
+                texts.append("")  # Empty text for images with no text found
+        
+        if any(texts):  # If at least one image had text
             return {
                 "success": True,
-                "text": full_text
+                "texts": texts,
+                "service": "google_vision"
             }
         
         return {
             "success": False,
-            "error": "No text found",
-            "text": ""
+            "error": "No text found in any images",
+            "texts": texts
         }
 
     except Exception as e:
@@ -76,7 +90,7 @@ async def ocr_parse(image_content: bytes) -> str:
         return {
             "success": False,
             "error": str(e),
-            "text": ""
+            "texts": [""] * len(images)  # Return empty texts for all images
         }
 
 async def ocr_parse_space(image_content: bytes, content_type: str = None, filename: str = None) -> dict:

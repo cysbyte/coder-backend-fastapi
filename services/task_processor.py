@@ -1,5 +1,5 @@
 import asyncio
-from services.ocr_service import ocr_parse_mock
+from services.ocr_service import ocr_parse
 from services.ai_service import process_with_openai_mock
 from services.websocket_service import manager
 from services.storage_service import upload_to_storage
@@ -76,7 +76,7 @@ async def process_image_task(
             "total_images": len(images)
         })
         
-        ocr_result = await ocr_parse_mock(images)
+        ocr_result = await ocr_parse(images)
         
         if not ocr_result["success"]:
             await manager.send_message(task_id, {
@@ -89,7 +89,7 @@ async def process_image_task(
         # Update record with OCR results
         await update_record_status(record["id"], {
             "ocr_texts": ocr_result["texts"],
-            "ocr_service": "mock"
+            "ocr_service": "google_vision"
         })
 
         await manager.send_message(task_id, {
