@@ -62,15 +62,56 @@ async def ocr_parse(images: list[dict]) -> dict:
             # Create image object
             image_obj = vision.Image(content=image["content"])
 
-            # Perform text detection
-            response = client.text_detection(image=image_obj)
-            text_annotations = response.text_annotations
+            # Perform text detection with layout analysis
+            response = client.document_text_detection(image=image_obj)
+            document = response.full_text_annotation
 
-            if text_annotations and text_annotations[0].description.strip():
-                # Get the full text from the first annotation
-                texts.append(text_annotations[0].description)
-            else:
-                texts.append("")  # Empty text for images with no text found
+            if not document:
+                texts.append("")
+                continue
+
+            # Process the document layout
+            paragraphs = []
+            current_paragraph = []
+            
+            # Sort pages by their position
+            pages = sorted(document.pages, key=lambda p: p.property.detected_languages[0].confidence)
+            
+            for page in pages:
+                # Sort blocks by their vertical position
+                blocks = sorted(page.blocks, key=lambda b: b.bounding_box.vertices[0].y)
+                
+                for block in blocks:
+                    # Sort paragraphs by their vertical position
+                    paragraphs_in_block = sorted(block.paragraphs, key=lambda p: p.bounding_box.vertices[0].y)
+                    
+                    for paragraph in paragraphs_in_block:
+                        # Get the text from the paragraph
+                        paragraph_text = ""
+                        for word in paragraph.words:
+                            word_text = ''.join([
+                                symbol.text for symbol in word.symbols
+                            ])
+                            paragraph_text += word_text + " "
+                        
+                        # Clean up the paragraph text
+                        paragraph_text = paragraph_text.strip()
+                        
+                        # Skip empty paragraphs or very short ones (likely headers/titles)
+                        if not paragraph_text or len(paragraph_text) < 10:
+                            continue
+                            
+                        # Add paragraph to current list
+                        current_paragraph.append(paragraph_text)
+                
+                # Join paragraphs with proper spacing
+                if current_paragraph:
+                    paragraphs.append("\n\n".join(current_paragraph))
+                    current_paragraph = []
+            
+            # Join all paragraphs with double newlines
+            final_text = "\n\n".join(paragraphs)
+            texts.append(final_text)
         
         if any(texts):  # If at least one image had text
             return {
