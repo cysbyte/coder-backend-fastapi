@@ -1,6 +1,6 @@
 import asyncio
 from services.ocr_service import ocr_parse
-from services.ai_service import process_with_openai_mock
+from services.ai_service import process_with_openai
 from services.websocket_service import manager
 from services.storage_service import upload_to_storage
 from services.database_service import update_record_status, save_image_record
@@ -101,7 +101,7 @@ async def process_image_task(
             }
         })
 
-        # AI Analysis for all texts
+        # AI Analysis for all texts at once
         await manager.send_message(task_id, {
             "status": "ai processing",
             "step": "ai",
@@ -109,57 +109,47 @@ async def process_image_task(
             "total_images": len(images)
         })
         
-        results = []
-        ai_analyses = []
-        for index, text in enumerate(ocr_result["texts"]):
-            ai_result = await process_with_openai_mock(text)
+        ai_result = await process_with_openai(ocr_result["texts"])
+        
+        if not ai_result["success"]:
+            await update_record_status(record["id"], {
+                "status": "ai_error",
+                "ai_error": ai_result.get("error", "AI analysis failed")
+            })
             
-            if not ai_result["success"]:
-                await update_record_status(record["id"], {
-                    "status": "ai_error",
-                    "ai_error": f"Failed for image {index + 1}: {ai_result.get('error', 'AI analysis failed')}"
-                })
-                
-                await manager.send_message(task_id, {
-                    "status": "ai error",
-                    "step": "ai",
-                    "message": f"AI analysis failed for image {index + 1}: {ai_result.get('error', 'AI analysis failed')}",
-                    "current_image": index + 1,
-                    "total_images": len(images)
-                })
-                continue
-
-            # Add result to lists
-            results.append({
-                "filename": images[index]["filename"],
-                "ocr_text": text,
-                "ai_analysis": ai_result["analysis"]
-            })
-            ai_analyses.append(ai_result["analysis"])
-
             await manager.send_message(task_id, {
-                "status": "image completed",
+                "status": "ai error",
                 "step": "ai",
-                "message": f"Completed processing image {index + 1}",
-                "data": {
-                    "ocr_text": text,
-                    "ai_analysis": ai_result["analysis"]
-                },
-                "current_image": index + 1,
-                "total_images": len(images)
+                "message": f"AI analysis failed: {ai_result.get('error', 'AI analysis failed')}"
             })
+            return
 
         # Update record with AI results
         await update_record_status(record["id"], {
-            "ai_analyses": ai_analyses,
-            "ai_service": "mock"
+            "ai_analysis": ai_result["analysis"],
+            "ai_service": "openai_gpt4"
         })
 
-        # Send final completion message
+        # Extract problem and solution from AI analysis
+        analysis_text = ai_result["analysis"]
+        problem_start = analysis_text.find("- Problem:")
+        solution_start = analysis_text.find("- Solution:")
+        
+        if problem_start != -1 and solution_start != -1:
+            problem = analysis_text[problem_start + 10:solution_start].strip()
+            solution = analysis_text[solution_start + 10:].strip()
+        else:
+            problem = ""
+            solution = ""
+
+        # Send final completion message with problem and solution
         await manager.send_message(task_id, {
             "status": "completed",
-            "message": f"Completed processing all {len(images)} images",
-            "results": results
+            "message": "Successfully extracted problem and solution",
+            "data": {
+                "question": problem,
+                "solution": solution
+            }
         })
 
     except Exception as e:

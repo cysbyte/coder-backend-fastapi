@@ -2,55 +2,62 @@ from openai import OpenAI
 import os
 import asyncio
 from typing import Dict, Any
+import aiohttp
 
-async def process_with_openai(ocr_text: str) -> dict:
+async def process_with_openai(texts: list[str]) -> dict:
+    """
+    Process OCR texts using AWS service API with GPT-4
+    Args:
+        texts: List of OCR texts to analyze
+    Returns:
+        dict containing success status and analysis results
+    """
     try:
-        # Truncate very long texts
-        max_chars = 4000
-        truncated_text = ocr_text[:max_chars] if len(ocr_text) > max_chars else ocr_text
-        
-        if len(ocr_text) > max_chars:
-            truncated_text += "... (text truncated)"
-            
-        client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-        
-        prompt = f"""Analyze this coding problem and provide:
-        1. Problem Summary: Brief description of what the problem is asking
-        2. Input/Output Examples: Example test cases
-        3. Key Points:
-           - Time Complexity requirement (if mentioned)
-           - Space Complexity requirement (if mentioned)
-           - Any constraints or special conditions
-        4. Suggested Approach:
-           - Main algorithm or data structure to use
-           - Key steps to solve the problem
-        5. Common Pitfalls: What to watch out for
-        6. Follow-up Questions: Any additional challenges mentioned
+        # AWS service API endpoint
+        ai_service_url = os.getenv('AI_SERVICE_URL')
+        if not ai_service_url:
+            return {
+                "success": False,
+                "error": "AWS service URL not found in environment variables"
+            }
+ 
+        # Prepare the prompt with all texts
+        combined_text = "\n\n".join([
+            f"Text {i+1}:\n{text}" for i, text in enumerate(texts)
+        ])
 
-        Problem Text:
-        {truncated_text}
-        """
+        # Prepare the request payload with the new prompt format
+        payload = {
+            "prompt": f"""You are a helpful assistant. I will provide the text of a programming problem from Leetcode, followed by the solution. Please extract the problem statement and the solution. 
+        Format the response as follows:
+        - Problem:
+        - Solution:
         
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {
-                    "role": "system", 
-                    "content": "You are an expert coding interview coach who helps analyze and break down coding problems. Provide clear, structured analysis with a focus on problem-solving approach and optimization."
-                },
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=800,  # Increased token limit for more detailed analysis
-            temperature=0.7
-        )
-        
-        return {
-            "success": True,
-            "analysis": response.choices[0].message.content
+        Here is the text:
+        {combined_text}""",
+            "model": "gpt-4o-mini"
         }
-        
+
+        # Make POST request to AWS service
+        async with aiohttp.ClientSession() as session:
+            async with session.post(ai_service_url+"/chat", json=payload) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return {
+                        "success": True,
+                        "analysis": result.get("response", ""),
+                        "service": "openai_gpt4"
+                    }
+                else:
+                    error_text = await response.text()
+                    return {
+                        "success": False,
+                        "error": f"AI service error: {error_text}",
+                        "status_code": response.status
+                    }
+
     except Exception as e:
-        print(f"OpenAI API Error: {str(e)}")
+        print(f"OpenAI Processing Error: {str(e)}")
         return {
             "success": False,
             "error": str(e)
