@@ -6,7 +6,8 @@ from services.storage_service import upload_to_storage
 from services.database_service import update_record_status, save_image_record
 import uuid
 from datetime import datetime
-
+import os
+import aiohttp
 
 async def process_image_task(
     task_id: str,
@@ -132,15 +133,17 @@ async def process_image_task(
 
         # Extract problem and solution from AI analysis
         analysis_text = ai_result["analysis"]
-        problem_start = analysis_text.find("- Problem:")
-        solution_start = analysis_text.find("- Solution:")
+        problem_start = analysis_text.find("[[[")
+        problem_end = analysis_text.find("]]]")
         
-        if problem_start != -1 and solution_start != -1:
-            problem = analysis_text[problem_start + 10:solution_start].strip()
-            solution = analysis_text[solution_start + 10:].strip()
+        if problem_start != -1 and problem_end != -1:
+            # Extract problem (content between [[[ and ]]])
+            problem = analysis_text[problem_start + 3:problem_end].strip()
+            # Extract solution (everything after ]]])
+            solution = analysis_text[problem_end + 3:].strip()
         else:
             problem = ""
-            solution = ""
+            solution = analysis_text.strip()  # If no markers found, use entire text as solution
 
         # Send final completion message with problem and solution
         await manager.send_message(task_id, {
@@ -157,4 +160,53 @@ async def process_image_task(
             "status": "error",
             "message": str(e)
         })
+
+
+async def process_debug_task(
+    task_id: str,
+    image: dict,  # Dict containing image_content and filename
+    message: str,
+    user_id: str
+):
+    """
+    Process a single image with OCR and combine with message for AI analysis
+    Args:
+        task_id: Unique task identifier
+        image: Dict containing image content and filename
+        message: Additional message to combine with OCR text
+        user_id: User ID of the requester
+    """
+    try:
+        # OCR Processing
+        ocr_result = await ocr_parse([image])
+        
+        if not ocr_result["success"]:
+            return {
+                "success": False,
+                "error": ocr_result.get("error", "OCR processing failed")
+            }
+
+        # Combine OCR text with message
+        combined_text = f"{ocr_result['texts'][0]}\n\nUser Message:\n{message}"
+
+        # Call AI service using process_with_openai
+        ai_result = await process_with_openai([combined_text])
+        
+        if not ai_result["success"]:
+            return {
+                "success": False,
+                "error": ai_result.get("error", "AI analysis failed")
+            }
+
+        return {
+            "success": True,
+            "analysis": ai_result["analysis"],
+            "ocr_text": ocr_result["texts"][0]
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
 

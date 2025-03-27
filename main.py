@@ -95,7 +95,6 @@ async def login(request: SignInRequest):
                 "auth": user,
                 "user_record": user_query.data[0]
             }
-            # o3-miini-high
             
         return user
     except Exception as e:

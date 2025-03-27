@@ -4,6 +4,20 @@ import asyncio
 from typing import Dict, Any
 import aiohttp
 
+system_prompt = """
+{
+  "role": "system",
+  "content": "You are an AI assistant that solves LeetCode problems. The user will provide a problem statement. Instead, wrap the entire problem text within `[[[ ]]]`. Then, generate a well-structured solution including an explanation and a code implementation.
+  Your task is to:
+  1. Extract the problem statement and constraints
+  2. Identify the problem type and difficulty level
+  3. Provide a step-by-step solution in Python
+  4. Include time and space complexity analysis
+  5. Offer hints for edge cases and optimizations
+  6. If the user does not specify a language, default to Python."
+}
+"""
+
 async def process_with_openai(texts: list[str]) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
@@ -26,21 +40,19 @@ async def process_with_openai(texts: list[str]) -> dict:
             f"Text {i+1}:\n{text}" for i, text in enumerate(texts)
         ])
 
-        # Prepare the request payload with the new prompt format
+        # Prepare the request payload with conversation format
         payload = {
-            "prompt": f"""You are a helpful assistant. I will provide the text of a programming problem from Leetcode, followed by the solution. Please extract the problem statement and the solution. 
-        Format the response as follows:
-        - Problem:
-        - Solution:
-        
-        Here is the text:
-        {combined_text}""",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": combined_text}
+            ],
             "model": "gpt-4o-mini"
         }
 
         # Make POST request to AWS service
         async with aiohttp.ClientSession() as session:
-            async with session.post(ai_service_url+"/chat", json=payload) as response:
+            # Add /chat endpoint to the URL
+            async with session.post(f"{ai_service_url}/chat", json=payload) as response:
                 if response.status == 200:
                     result = await response.json()
                     return {
@@ -50,6 +62,7 @@ async def process_with_openai(texts: list[str]) -> dict:
                     }
                 else:
                     error_text = await response.text()
+                    print(f"AI Service Error Response: {error_text}")  # Add logging
                     return {
                         "success": False,
                         "error": f"AI service error: {error_text}",
