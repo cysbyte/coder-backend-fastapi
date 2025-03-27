@@ -35,3 +35,30 @@ async def save_image_record(image_data: dict):
             "error": str(e)
         } 
     
+async def get_record_by_task_id(task_id: str) -> dict:
+    """
+    Fetch a record by task_id from Supabase
+    Args:
+        task_id: The task ID to fetch
+    Returns:
+        dict containing the record data or error information
+    """
+    try:
+        response = supabase.table('tasks').select('*').eq('task_id', task_id).execute()
+        
+        if response.data and len(response.data) > 0:
+            return {
+                "success": True,
+                "data": response.data[0]
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Record not found"
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        } 
+    

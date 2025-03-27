@@ -1,6 +1,6 @@
 import asyncio
 from services.ocr_service import ocr_parse
-from services.ai_service import process_with_openai
+from services.ai_service import process_with_openai, debug_with_openai
 from services.websocket_service import manager
 from services.storage_service import upload_to_storage
 from services.database_service import update_record_status, save_image_record
@@ -125,10 +125,17 @@ async def process_image_task(
             })
             return
 
-        # Update record with AI results
+        # Configure and store conversation
+        conversation = ai_result["conversation"]
+        conversation.append({
+            "role": "assistant",
+            "content": ai_result["analysis"]
+        })
+        # Update record with conversation
         await update_record_status(record["id"], {
             "ai_analysis": ai_result["analysis"],
-            "ai_service": "openai_gpt4"
+            "ai_service": "openai_gpt4",
+            "conversation": conversation
         })
 
         # Extract problem and solution from AI analysis
@@ -144,6 +151,7 @@ async def process_image_task(
         else:
             problem = ""
             solution = analysis_text.strip()  # If no markers found, use entire text as solution
+
 
         # Send final completion message with problem and solution
         await manager.send_message(task_id, {
@@ -164,9 +172,8 @@ async def process_image_task(
 
 async def process_debug_task(
     task_id: str,
-    image: dict,  # Dict containing image_content and filename
-    message: str,
-    user_id: str
+    images: list[dict]  ,  # Dict containing image_content and filename
+    debug_message: str,
 ):
     """
     Process a single image with OCR and combine with message for AI analysis
@@ -178,7 +185,7 @@ async def process_debug_task(
     """
     try:
         # OCR Processing
-        ocr_result = await ocr_parse([image])
+        ocr_result = await ocr_parse(images)
         
         if not ocr_result["success"]:
             return {
@@ -187,16 +194,47 @@ async def process_debug_task(
             }
 
         # Combine OCR text with message
-        combined_text = f"{ocr_result['texts'][0]}\n\nUser Message:\n{message}"
+        combined_text = f"{ocr_result['texts'][0]}\n\nUser Message:\n{debug_message}"
 
-        # Call AI service using process_with_openai
-        ai_result = await process_with_openai([combined_text])
+        # Call AI service using debug_with_openai
+        ai_result = await debug_with_openai([combined_text], debug_message, task_id)
         
         if not ai_result["success"]:
             return {
                 "success": False,
                 "error": ai_result.get("error", "AI analysis failed")
             }
+
+        # Update record with new conversation
+        await update_record_status(task_id, {
+            "ai_analysis": ai_result["analysis"],
+            "ai_service": "openai_gpt4",
+            "conversation": ai_result["conversation"]
+        })
+
+        analysis_text = ai_result["analysis"]
+        problem_start = analysis_text.find("[[[")
+        problem_end = analysis_text.find("]]]")
+        
+        if problem_start != -1 and problem_end != -1:
+            # Extract problem (content between [[[ and ]]])
+            problem = analysis_text[problem_start + 3:problem_end].strip()
+            # Extract solution (everything after ]]])
+            solution = analysis_text[problem_end + 3:].strip()
+        else:
+            problem = ""
+            solution = analysis_text.strip()  # If no markers found, use entire text as solution
+
+
+        # Send final completion message with problem and solution
+        await manager.send_message(task_id, {
+            "status": "completed",
+            "message": "Successfully extracted problem and solution",
+            "data": {
+                "question": problem,
+                "solution": solution
+            }
+        })
 
         return {
             "success": True,

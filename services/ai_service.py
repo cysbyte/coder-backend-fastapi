@@ -3,21 +3,8 @@ import os
 import asyncio
 from typing import Dict, Any
 import aiohttp
-
-system_prompt = """
-{
-  "role": "system",
-  "content": "You are an AI assistant that solves LeetCode problems. The user will provide a problem statement. Instead, wrap the entire problem text within `[[[ ]]]`. Then, generate a well-structured solution including an explanation and a code implementation.
-  Your task is to:
-  1. Extract the problem statement and constraints
-  2. Identify the problem type and difficulty level
-  3. Provide a step-by-step solution in Python
-  4. Include time and space complexity analysis
-  5. Offer hints for edge cases and optimizations
-  6. If the user does not specify a language, default to Python."
-}
-"""
-
+from utils.ai import system_prompt
+from services.database_service import get_record_by_task_id
 async def process_with_openai(texts: list[str]) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
@@ -40,12 +27,14 @@ async def process_with_openai(texts: list[str]) -> dict:
             f"Text {i+1}:\n{text}" for i, text in enumerate(texts)
         ])
 
+        conversation = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": combined_text}
+        ]
+
         # Prepare the request payload with conversation format
         payload = {
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": combined_text}
-            ],
+            "messages": conversation,
             "model": "gpt-4o-mini"
         }
 
@@ -58,7 +47,105 @@ async def process_with_openai(texts: list[str]) -> dict:
                     return {
                         "success": True,
                         "analysis": result.get("response", ""),
-                        "service": "openai_gpt4"
+                        "service": "openai_gpt4",
+                        "conversation": conversation
+                    }
+                else:
+                    error_text = await response.text()
+                    print(f"AI Service Error Response: {error_text}")  # Add logging
+                    return {
+                        "success": False,
+                        "error": f"AI service error: {error_text}",
+                        "status_code": response.status
+                    }
+
+    except Exception as e:
+        print(f"OpenAI Processing Error: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    
+async def debug_with_openai(texts: list[str], message: str, task_id: str) -> dict:
+    """
+    Process OCR texts using AWS service API with GPT-4
+    Args:
+        texts: List of OCR texts to analyze
+        message: User's debug message
+        task_id: Task ID to fetch existing conversation
+    Returns:
+        dict containing success status and analysis results
+    """
+    try:
+        # AWS service API endpoint
+        ai_service_url = os.getenv('AI_SERVICE_URL')
+        if not ai_service_url:
+            return {
+                "success": False,
+                "error": "AWS service URL not found in environment variables"
+            }
+
+        # Fetch existing record and conversation
+        record_result = await get_record_by_task_id(task_id)
+        if not record_result["success"]:
+            return {
+                "success": False,
+                "error": f"Failed to fetch record: {record_result.get('error', 'Unknown error')}"
+            }
+
+        record = record_result["data"]
+        # Ensure existing_conversation is a list
+        existing_conversation = record.get("conversation", [])
+        if isinstance(existing_conversation, str):
+            try:
+                import json
+                existing_conversation = json.loads(existing_conversation)
+            except:
+                existing_conversation = []
+
+        # Prepare the prompt with all texts
+        combined_text = "\n\n".join([
+            f"Text {i+1}:\n{text}" for i, text in enumerate(texts)
+        ])
+
+        combined_text = f"{combined_text}\n\nUser Message:\n{message}"
+
+        # If no existing conversation or empty conversation, create new one
+        if not existing_conversation:
+            conversation = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": combined_text}
+            ]
+        else:
+            # Use existing conversation and append new message
+            conversation = existing_conversation.copy()  # Create a copy to avoid modifying the original
+            conversation.append({
+                "role": "user",
+                "content": message
+            })
+
+        # Prepare the request payload with conversation format
+        payload = {
+            "messages": conversation,
+            "model": "gpt-4o-mini"
+        }
+
+        # Make POST request to AWS service
+        async with aiohttp.ClientSession() as session:
+            # Add /chat endpoint to the URL
+            async with session.post(f"{ai_service_url}/chat", json=payload) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    # Append assistant's response to conversation
+                    conversation.append({
+                        "role": "assistant",
+                        "content": result.get("response", "")
+                    })
+                    return {
+                        "success": True,
+                        "analysis": result.get("response", ""),
+                        "service": "openai_gpt4",
+                        "conversation": conversation
                     }
                 else:
                     error_text = await response.text()
