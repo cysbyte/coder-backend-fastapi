@@ -49,10 +49,85 @@ class SignUpRequest(BaseModel):
     email: str
     password: str
 
+class ValidationCodeRequest(BaseModel):
+    email: str
+
+class VerifyCodeRequest(BaseModel):
+    email: str
+    code: str
+
 @app.get("/")
 def read_root():
     return {"Hello": "World!!!"}
 
+@app.post("/auth/send-code")
+async def send_validation_code(request: ValidationCodeRequest):
+    """
+    Send validation code to user's email
+    """
+    try:
+        # Send validation code using Supabase
+        response = supabase.auth.sign_in_with_otp({
+            "email": request.email
+        })
+        
+        return {
+            "success": True,
+            "message": "Validation code sent successfully",
+            "data": response
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/auth/verify-code")
+async def verify_validation_code(request: VerifyCodeRequest):
+    """
+    Verify the validation code sent to user's email
+    """
+    try:
+        # Verify the code using Supabase
+        response = supabase.auth.verify_otp({
+            "email": request.email,
+            "token": request.code,
+            "type": "email"
+        })
+        
+        if response.user:
+            # Check if user exists in users table
+            user_query = supabase.table('users').select("*").eq('user_id', response.user.id).execute()
+            
+            # If user doesn't exist in the users table, create a record
+            if not user_query.data:
+                user_data = {
+                    "user_id": response.user.id,
+                    "email": request.email,
+                }
+                # Insert the user data into the 'users' table
+                user_record = supabase.table('users').insert(user_data).execute()
+                return {
+                    "success": True,
+                    "auth": response,
+                    "user_record": user_record.data
+                }
+            
+            return {
+                "success": True,
+                "auth": response,
+                "user_record": user_query.data[0]
+            }
+            
+        return {
+            "success": False,
+            "error": "Invalid validation code"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 @app.get("/items/{item_id}")
 def read_item(item_id: int, q: Union[str, None] = None):
