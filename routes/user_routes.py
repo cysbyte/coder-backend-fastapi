@@ -98,6 +98,8 @@ async def verify_pricing_token(
             # Extract user information
             email = decoded_data.get("email")
             avatar = decoded_data.get("avatar")
+            access_token = decoded_data.get("accessToken")
+            refresh_token = decoded_data.get("refreshToken")
             
             if not email:
                 raise HTTPException(
@@ -109,7 +111,9 @@ async def verify_pricing_token(
                 "success": True,
                 "data": {
                     "email": email,
-                    "avatar": avatar
+                    "avatar": avatar,
+                    "accessToken": access_token,
+                    "refreshToken": refresh_token
                 },
             }
             
