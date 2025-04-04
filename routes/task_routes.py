@@ -22,14 +22,15 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
     except WebSocketDisconnect:
         await manager.disconnect(websocket, task_id)
 
-@router.post("/upload/image")
+@router.post("/generate")
 async def upload_image(
     files: list[UploadFile] = File(..., description="List of image files to upload"),
     title: str = Form(None, description="Optional title for the batch of images"),
     description: str = Form(None, description="Optional description for the batch of images"),
     authorization: Optional[str] = Header(None, description="Bearer token for authentication"),
     response: Response = None,
-    user_id: str = Form(..., description="User ID of the uploader")
+    user_id: str = Form(..., description="User ID of the uploader"),
+    user_input = Form(..., description="User Input")
 ):
     try:
         # Validate files parameter
@@ -83,7 +84,8 @@ async def upload_image(
         asyncio.create_task(process_image_task(
             task_id=task_id,
             images=images,
-            user_id=user_id
+            user_id=user_id,
+            user_input=user_input
         ))
         
         # Return task information
@@ -107,13 +109,13 @@ async def upload_image(
             detail=str(e)
         )
 
-@router.post("/upload/debug")
+@router.post("/debug")
 async def debug(
     files: list[UploadFile] = File(..., description="List of image files to upload"),
     authorization: Optional[str] = Header(None, description="Bearer token for authentication"),
     user_id: str = Form(..., description="User ID of the uploader"),
     task_id: str = Form(..., description="Task ID"),
-    debug_message: str = Form(..., description="Debug message"),
+    user_input: str = Form(..., description="User Input"),
     response: Response = None
 ):
     try:
@@ -166,7 +168,7 @@ async def debug(
             user_id=user_id,
             task_id=task_id,
             images=images,
-            debug_message=debug_message,
+            user_input=user_input,
         ))
         
         # Return task information

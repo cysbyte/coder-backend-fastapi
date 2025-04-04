@@ -115,12 +115,12 @@ async def verify_validation_code(request: VerifyCodeRequest):
         
         if response.user:
             # Check if user exists in users table
-            user_query = supabase.table('users').select("*").eq('user_id', response.user.id).execute()
+            user_query = supabase.table('users').select("*").eq('id', response.user.id).execute()
             
             # If user doesn't exist in the users table, create a record
             if not user_query.data:
                 user_data = {
-                    "user_id": response.user.id,
+                    "id": response.user.id,
                     "email": request.email,
                 }
                 # Insert the user data into the 'users' table

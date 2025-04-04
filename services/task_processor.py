@@ -12,7 +12,8 @@ import aiohttp
 async def process_image_task(
     task_id: str,
     images: list[dict],  # List of dicts containing image_content and filename
-    user_id: str
+    user_id: str,
+    user_input: str
 ):
     try:
         # Send start message
@@ -50,7 +51,7 @@ async def process_image_task(
 
         # Create a single record with arrays of URLs and filenames
         initial_record = {
-            "task_id": task_id,
+            "id": task_id,
             "image_urls": [result["file_url"] for result in storage_results],
             "file_names": [image["filename"] for image in images],
             "user_id": user_id,
@@ -110,7 +111,7 @@ async def process_image_task(
             "total_images": len(images)
         })
         
-        ai_result = await process_with_openai(ocr_result["texts"])
+        ai_result = await process_with_openai(ocr_result["texts"], user_input)
         
         if not ai_result["success"]:
             await update_record_status(record["id"], {
@@ -150,7 +151,7 @@ async def process_image_task(
             solution = analysis_text[problem_end + 3:].strip()
         else:
             problem = ""
-            solution = analysis_text.strip()  # If no markers found, use entire text as solution
+            solution = analysis_text.strip().replace('---', '')  # If no markers found, use entire text as solution
 
 
         # Send final completion message with problem and solution
@@ -173,7 +174,7 @@ async def process_image_task(
 async def process_debug_task(
     task_id: str,
     images: list[dict]  ,  # Dict containing image_content and filename
-    debug_message: str,
+    user_input: str,
 ):
     """
     Process a single image with OCR and combine with message for AI analysis
@@ -193,11 +194,8 @@ async def process_debug_task(
                 "error": ocr_result.get("error", "OCR processing failed")
             }
 
-        # Combine OCR text with message
-        combined_text = f"{ocr_result['texts'][0]}\n\nUser Message:\n{debug_message}"
-
         # Call AI service using debug_with_openai
-        ai_result = await debug_with_openai([combined_text], debug_message, task_id)
+        ai_result = await debug_with_openai(ocr_result["texts"], user_input, task_id)
         
         if not ai_result["success"]:
             return {
@@ -223,7 +221,7 @@ async def process_debug_task(
             solution = analysis_text[problem_end + 3:].strip()
         else:
             problem = ""
-            solution = analysis_text.strip()  # If no markers found, use entire text as solution
+            solution = analysis_text.strip().replace('---', '')  # If no markers found, use entire text as solution
 
 
         # Send final completion message with problem and solution

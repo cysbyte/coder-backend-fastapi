@@ -3,9 +3,10 @@ import os
 import asyncio
 from typing import Dict, Any
 import aiohttp
-from utils.ai import system_prompt
+from utils.ai import system_prompt, get_user_prompt
 from services.database_service import get_record_by_task_id
-async def process_with_openai(texts: list[str]) -> dict:
+
+async def process_with_openai(texts: list[str], user_input: str) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
     Args:
@@ -29,7 +30,7 @@ async def process_with_openai(texts: list[str]) -> dict:
 
         conversation = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": combined_text}
+            {"role": "user", "content": get_user_prompt('generate', 'python', combined_text, user_input)}
         ]
 
         # Prepare the request payload with conversation format
@@ -65,8 +66,9 @@ async def process_with_openai(texts: list[str]) -> dict:
             "success": False,
             "error": str(e)
         }
+        
     
-async def debug_with_openai(texts: list[str], message: str, task_id: str) -> dict:
+async def debug_with_openai(texts: list[str], user_input: str, task_id: str) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
     Args:
@@ -108,20 +110,18 @@ async def debug_with_openai(texts: list[str], message: str, task_id: str) -> dic
             f"Text {i+1}:\n{text}" for i, text in enumerate(texts)
         ])
 
-        combined_text = f"{combined_text}\n\nUser Message:\n{message}"
-
         # If no existing conversation or empty conversation, create new one
         if not existing_conversation:
             conversation = [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": combined_text}
+                {"role": "user", "content": get_user_prompt('generate', 'python', combined_text, user_input)}
             ]
         else:
             # Use existing conversation and append new message
             conversation = existing_conversation.copy()  # Create a copy to avoid modifying the original
             conversation.append({
                 "role": "user",
-                "content": message
+                "content": user_input
             })
 
         # Prepare the request payload with conversation format
