@@ -50,8 +50,9 @@ Provide a corrected version of the code with clear improvements and inline comme
 
 """
 
-def get_user_prompt(mode, language, orc_text, user_input):
-    return f"""
+def get_user_prompt(mode, language, ocr_text, user_input):
+    if ocr_text and ocr_text != "":
+        return f"""
 *Mode*: 
 {mode}
 
@@ -59,7 +60,19 @@ def get_user_prompt(mode, language, orc_text, user_input):
 {language}
 
 *OCR Text*:
-{orc_text}
+{ocr_text}
+
+*User Text Input*:
+{user_input}
+
+"""
+    else:
+        return f"""
+*Mode*: 
+{mode}
+
+*Programming Language*: 
+{language}
 
 *User Text Input*:
 {user_input}

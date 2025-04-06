@@ -6,7 +6,7 @@ import aiohttp
 from utils.ai import system_prompt, get_user_prompt
 from services.database_service import get_record_by_task_id
 
-async def process_with_openai(texts: list[str], user_input: str) -> dict:
+async def generate_with_openai(texts: list[str], user_input: str) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
     Args:
@@ -121,7 +121,7 @@ async def debug_with_openai(texts: list[str], user_input: str, task_id: str) -> 
             conversation = existing_conversation.copy()  # Create a copy to avoid modifying the original
             conversation.append({
                 "role": "user",
-                "content": user_input
+                "content": get_user_prompt('debug', 'python', combined_text, user_input)
             })
 
         # Prepare the request payload with conversation format

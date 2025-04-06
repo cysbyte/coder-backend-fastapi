@@ -1,6 +1,7 @@
 import asyncio
+from typing import Optional
 from services.ocr_service import ocr_parse
-from services.ai_service import process_with_openai, debug_with_openai
+from services.ai_service import generate_with_openai, debug_with_openai
 from services.websocket_service import manager
 from services.storage_service import upload_to_storage
 from services.database_service import update_record_status, save_image_record
@@ -9,7 +10,7 @@ from datetime import datetime
 import os
 import aiohttp
 
-async def process_image_task(
+async def process_generate_task(
     task_id: str,
     images: list[dict],  # List of dicts containing image_content and filename
     user_id: str,
@@ -111,7 +112,7 @@ async def process_image_task(
             "total_images": len(images)
         })
         
-        ai_result = await process_with_openai(ocr_result["texts"], user_input)
+        ai_result = await generate_with_openai(ocr_result["texts"], user_input)
         
         if not ai_result["success"]:
             await update_record_status(record["id"], {
@@ -173,26 +174,31 @@ async def process_image_task(
 
 async def process_debug_task(
     task_id: str,
-    images: list[dict]  ,  # Dict containing image_content and filename
+    user_id: str,
     user_input: str,
+    images: Optional[list[dict]] = None  # Make images optional
 ):
     """
     Process a single image with OCR and combine with message for AI analysis
     Args:
         task_id: Unique task identifier
-        image: Dict containing image content and filename
-        message: Additional message to combine with OCR text
         user_id: User ID of the requester
+        user_input: Additional message to combine with OCR text
+        images: Optional list of dicts containing image content and filename
     """
     try:
-        # OCR Processing
-        ocr_result = await ocr_parse(images)
+        # Initialize OCR result
+        ocr_result = {"success": True, "texts": []}
         
-        if not ocr_result["success"]:
-            return {
-                "success": False,
-                "error": ocr_result.get("error", "OCR processing failed")
-            }
+        # Only perform OCR if images are provided
+        if images:
+            ocr_result = await ocr_parse(images)
+            
+            if not ocr_result["success"]:
+                return {
+                    "success": False,
+                    "error": ocr_result.get("error", "OCR processing failed")
+                }
 
         # Call AI service using debug_with_openai
         ai_result = await debug_with_openai(ocr_result["texts"], user_input, task_id)
@@ -223,7 +229,6 @@ async def process_debug_task(
             problem = ""
             solution = analysis_text.strip().replace('---', '')  # If no markers found, use entire text as solution
 
-
         # Send final completion message with problem and solution
         await manager.send_message(task_id, {
             "status": "completed",
@@ -237,7 +242,7 @@ async def process_debug_task(
         return {
             "success": True,
             "analysis": ai_result["analysis"],
-            "ocr_text": ocr_result["texts"][0]
+            "ocr_text": ocr_result["texts"][0] if ocr_result["texts"] else None
         }
 
     except Exception as e:

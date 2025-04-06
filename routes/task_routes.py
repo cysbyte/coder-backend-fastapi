@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Response, Header, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from typing import Optional, Union
 import asyncio
-from services.task_processor import process_image_task, process_debug_task
+from services.task_processor import process_generate_task, process_debug_task
 from services.websocket_service import manager
 from utils.auth import validate_access_token
 import uuid
@@ -81,7 +81,7 @@ async def upload_image(
             })
         
         # Create async task with all images
-        asyncio.create_task(process_image_task(
+        asyncio.create_task(process_generate_task(
             task_id=task_id,
             images=images,
             user_id=user_id,
@@ -111,7 +111,7 @@ async def upload_image(
 
 @router.post("/debug")
 async def debug(
-    files: list[UploadFile] = File(..., description="List of image files to upload"),
+    files: Optional[list[UploadFile]] = File(None, description="List of image files to upload"),
     authorization: Optional[str] = Header(None, description="Bearer token for authentication"),
     user_id: str = Form(..., description="User ID of the uploader"),
     task_id: str = Form(..., description="Task ID"),
@@ -119,15 +119,8 @@ async def debug(
     response: Response = None
 ):
     try:
-        # Validate files parameter
-        if not files:
-            raise HTTPException(
-                status_code=400,
-                detail="No files provided in the request"
-            )
-
         # Validate number of files
-        if len(files) > 2:
+        if files and len(files) > 2:
             raise HTTPException(
                 status_code=400,
                 detail="Maximum 2 images allowed per request"
@@ -138,13 +131,14 @@ async def debug(
         
         # Prepare images for processing
         images = []
-        for file in files:
-            # Validate file type
-            if not file.content_type.startswith('image/'):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid file type for {file.filename}. Only images are allowed."
-                )
+        if files:
+            for file in files:
+                # Validate file type
+                if not file.content_type.startswith('image/'):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invalid file type for {file.filename}. Only images are allowed."
+                    )
 
             # Read file content
             content = await file.read()
