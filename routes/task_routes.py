@@ -4,6 +4,7 @@ import asyncio
 from services.task_processor import process_generate_task, process_debug_task
 from services.websocket_service import manager
 from utils.auth import validate_access_token
+from services.database_service import get_user_credits
 import uuid
 
 router = APIRouter(
@@ -49,6 +50,21 @@ async def upload_image(
 
         # First validate the access token
         user, token_refreshed = await validate_access_token(authorization, response)
+        
+        # Check user's remaining credits
+        credits_result = await get_user_credits(user_id)
+        if not credits_result["success"]:
+            raise HTTPException(
+                status_code=404,
+                detail=credits_result.get("error", "Failed to get user credits")
+            )
+            
+        remaining_credits = credits_result["data"]["remaining_credits"]
+        if remaining_credits <= 0:
+            raise HTTPException(
+                status_code=403,
+                detail="Insufficient credits. Please purchase more credits to continue."
+            )
         
         # Generate task ID
         task_id = str(uuid.uuid4())
@@ -128,7 +144,21 @@ async def debug(
 
         # First validate the access token
         user, token_refreshed = await validate_access_token(authorization, response)
+
+        # Check user's remaining credits
+        credits_result = await get_user_credits(user_id)
+        if not credits_result["success"]:
+            raise HTTPException(
+                status_code=404,
+                detail=credits_result.get("error", "Failed to get user credits")
+            )
         
+        remaining_credits = credits_result["data"]["remaining_credits"]
+        if remaining_credits <= 0:
+            raise HTTPException(
+                status_code=403,
+                detail="Insufficient credits. Please purchase more credits to continue."
+            )
         # Prepare images for processing
         images = []
         if files:

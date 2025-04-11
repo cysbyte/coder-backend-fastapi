@@ -64,7 +64,7 @@ async def get_record_by_task_id(task_id: str) -> dict:
     
 async def update_user_credits(user_id: str, credit_change: int) -> dict:
     """
-    Update user's free_credit in the users table
+    Update user's remaining_credits in the users table
     Args:
         user_id: The user's ID
         credit_change: Amount to change (negative for reduction)
@@ -74,7 +74,7 @@ async def update_user_credits(user_id: str, credit_change: int) -> dict:
     try:
         
         # First get current credits
-        user_query = supabase.table('users').select('free_credit').eq('id', user_id).execute()
+        user_query = supabase.table('users').select('remaining_credits').eq('id', user_id).execute()
         
         if not user_query.data or len(user_query.data) == 0:
             return {
@@ -82,18 +82,19 @@ async def update_user_credits(user_id: str, credit_change: int) -> dict:
                 "error": "User not found"
             }
             
-        current_credits = user_query.data[0].get('free_credit', 0)
+        current_credits = user_query.data[0].get('remaining_credits', 0)
         new_credits = max(0, current_credits + credit_change)  # Ensure credits don't go below 0
         
         # Update credits
         response = supabase.table('users').update({
-            'free_credit': new_credits
-        }).eq('user_id', user_id).execute()
+            'remaining_credits': new_credits
+        }).eq('id', user_id).execute()
         
         if response.data and len(response.data) > 0:
             return {
                 "success": True,
-                "data": response.data[0]
+                "data": response.data[0],
+                "new_credits": new_credits
             }
         else:
             return {
@@ -109,20 +110,22 @@ async def update_user_credits(user_id: str, credit_change: int) -> dict:
     
 async def get_user_credits(user_id: str) -> dict:
     """
-    Get user's free_credit from the users table
+    Get user's total_credits from the users table
     Args:
         user_id: The user's ID
     Returns:
         dict containing success status and user's credit information
     """
     try:
-        response = supabase.table('users').select('free_credit').eq('id', user_id).execute()
+        response = supabase.table('users').select('total_credits, remaining_credits, subscription_name').eq('id', user_id).execute()
         
         if response.data and len(response.data) > 0:
             return {
                 "success": True,
                 "data": {
-                    "free_credit": response.data[0].get('free_credit', 0)
+                    "total_credits": response.data[0].get('total_credits', 0),
+                    "remaining_credits": response.data[0].get('remaining_credits', 0),
+                    "subscription_name": response.data[0].get('subscription_name', None)
                 }
             }
         else:

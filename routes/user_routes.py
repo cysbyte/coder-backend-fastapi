@@ -25,7 +25,7 @@ router = APIRouter(
 class PricingTokenRequest(BaseModel):
     token: str
 
-@router.get("/free_credits/{user_id}")
+@router.get("/credits/{user_id}")
 async def get_credits(
     user_id: str,
     authorization: Optional[str] = Header(None, description="Bearer token for authentication"),

@@ -4,7 +4,7 @@ from services.ocr_service import ocr_parse
 from services.ai_service import generate_with_openai, debug_with_openai
 from services.websocket_service import manager
 from services.storage_service import upload_to_storage
-from services.database_service import update_record_status, save_image_record
+from services.database_service import update_record_status, save_image_record, update_user_credits
 import uuid
 from datetime import datetime
 import os
@@ -165,6 +165,19 @@ async def process_generate_task(
             }
         })
 
+        # Update user credits
+        credits_result = await update_user_credits(user_id, -1)
+        if not credits_result["success"]:
+            await manager.send_message(task_id, {
+                "status": "credits error",
+                "message": credits_result.get("error", "Failed to update user credits")
+            })
+        if credits_result["new_credits"] <= 0:
+            await manager.send_message(task_id, {
+                "status": "no credits",
+                "message": "Insufficient credits. Please purchase more credits to continue."
+            })
+
     except Exception as e:
         await manager.send_message(task_id, {
             "status": "error",
@@ -238,6 +251,9 @@ async def process_debug_task(
                 "solution": solution
             }
         })
+
+        # Update user credits
+        await update_user_credits(user_id, -1)
 
         return {
             "success": True,

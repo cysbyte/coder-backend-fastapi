@@ -3,7 +3,7 @@ name: Build and Deploy Backend to ECS
 on:
   push:
     branches:
-      - main
+      - dev
 
 env:
   # Setting an environment variable with the value of a configuration variable
