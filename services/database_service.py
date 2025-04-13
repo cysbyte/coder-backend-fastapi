@@ -117,7 +117,7 @@ async def get_user_credits(user_id: str) -> dict:
         dict containing success status and user's credit information
     """
     try:
-        response = supabase.table('users').select('total_credits, remaining_credits, subscription_name').eq('id', user_id).execute()
+        response = supabase.table('users').select('total_credits, remaining_credits, subscription_name, first_name, last_name').eq('id', user_id).execute()
         
         if response.data and len(response.data) > 0:
             return {
@@ -125,7 +125,9 @@ async def get_user_credits(user_id: str) -> dict:
                 "data": {
                     "total_credits": response.data[0].get('total_credits', 0),
                     "remaining_credits": response.data[0].get('remaining_credits', 0),
-                    "subscription_name": response.data[0].get('subscription_name', None)
+                    "subscription_name": response.data[0].get('subscription_name', None),
+                    "first_name": response.data[0].get('first_name', None),
+                    "last_name": response.data[0].get('last_name', None)
                 }
             }
         else:

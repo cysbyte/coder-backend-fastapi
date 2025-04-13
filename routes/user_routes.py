@@ -3,6 +3,7 @@ from typing import Optional
 from pydantic import BaseModel
 from services.database_service import get_user_credits
 from utils.auth import validate_access_token
+from utils.supabase_client import supabase
 import jwt
 import os
 from dotenv import load_dotenv
@@ -24,6 +25,10 @@ router = APIRouter(
 
 class PricingTokenRequest(BaseModel):
     token: str
+
+class UpdateUserNameRequest(BaseModel):
+    first_name: str
+    last_name: str
 
 @router.get("/credits/{user_id}")
 async def get_credits(
@@ -50,6 +55,91 @@ async def get_credits(
         return {
             "success": True,
             "data": credits_result["data"],
+            "token_refreshed": token_refreshed
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+@router.post("/update-name/{user_id}")
+async def update_user_name(
+    user_id: str,
+    request: UpdateUserNameRequest,
+    authorization: Optional[str] = Header(None, description="Bearer token for authentication"),
+    response: Response = None
+):
+    """
+    Update user's first and last name
+    """
+    try:
+        # Validate the access token
+        user, token_refreshed = await validate_access_token(authorization, response)
+        
+        # Update user data
+        result = supabase.table('users').update({
+            'first_name': request.first_name,
+            'last_name': request.last_name
+        }).eq('id', user_id).execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to update user name"
+            )
+            
+        return {
+            "success": True,
+            "data": result.data[0],
+            "token_refreshed": token_refreshed
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+@router.delete("/{user_id}")
+async def delete_user(
+    user_id: str,
+    authorization: Optional[str] = Header(None, description="Bearer token for authentication"),
+    response: Response = None
+):
+    """
+    Delete a user record from the users table and all associated roles
+    """
+    try:
+        # Validate the access token
+        user, token_refreshed = await validate_access_token(authorization, response)
+        
+        # First delete all associated roles
+        roles_result = supabase.table('roles').delete().eq('user_id', user_id).execute()
+        tasks_result = supabase.table('tasks').delete().eq('user_id', user_id).execute()
+        
+        # Then delete the user record
+        user_result = supabase.table('users').delete().eq('id', user_id).execute()
+        
+        if not user_result.data:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found or already deleted"
+            )
+            
+        return {
+            "success": True,
+            "message": "User and associated roles deleted successfully",
+            "data": {
+                "user": user_result.data[0],
+                "roles_deleted": len(roles_result.data) if roles_result.data else 0,
+                "tasks_deleted": len(tasks_result.data) if tasks_result.data else 0
+            },
             "token_refreshed": token_refreshed
         }
         
