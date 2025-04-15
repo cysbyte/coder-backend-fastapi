@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Response, Header
+from fastapi import APIRouter, HTTPException, Response, Header, WebSocket, WebSocketDisconnect
 from typing import Optional
 from pydantic import BaseModel
 from services.database_service import get_user_credits
 from utils.auth import validate_access_token
 from utils.supabase_client import supabase
+from services.websocket_service import manager
 import jwt
 import os
 from dotenv import load_dotenv
@@ -29,6 +30,91 @@ class PricingTokenRequest(BaseModel):
 class UpdateUserNameRequest(BaseModel):
     first_name: str
     last_name: str
+
+@router.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str):
+    """
+    WebSocket endpoint for user-specific real-time updates
+    """
+    try:
+        await manager.connect(websocket, user_id)
+        while True:
+            # Keep connection alive and wait for messages
+            data = await websocket.receive_text()
+            print(f"Received message from user {user_id}: {data}")
+            
+            # Here you can add specific message handling logic for user updates
+            # For example, sending credit updates, role changes, etc.
+            
+    except WebSocketDisconnect:
+        await manager.disconnect(websocket, user_id)
+        print(f"User {user_id} disconnected")
+
+@router.post("/payment_successful/{user_id}")
+async def payment_successful(
+    user_id: str,
+    authorization: Optional[str] = Header(None, description="Bearer token for authentication"),
+    response: Response = None
+):
+    """
+    Handle successful payment and notify frontend
+    """
+    try:
+        # Validate the access token
+        user, token_refreshed = await validate_access_token(authorization, response)
+        
+        # Send notification through WebSocket
+        await manager.send_message(user_id, {
+            "type": "payment_successful",
+            "message": "Payment processed successfully"
+        })
+        
+        return {
+            "success": True,
+            "message": "Payment notification sent successfully",
+            "token_refreshed": token_refreshed
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+@router.post("/cancel_subscription/{user_id}")
+async def cancel_subscription(
+    user_id: str,
+    authorization: Optional[str] = Header(None, description="Bearer token for authentication"),
+    response: Response = None
+):
+    """
+    Handle subscription cancellation and notify frontend
+    """
+    try:
+        # Validate the access token
+        user, token_refreshed = await validate_access_token(authorization, response)
+        
+        # Send notification through WebSocket
+        await manager.send_message(user_id, {
+            "type": "subscription_cancelled",
+            "message": "Your subscription has been cancelled successfully"
+        })
+        
+        return {
+            "success": True,
+            "message": "Subscription cancellation notification sent successfully",
+            "token_refreshed": token_refreshed
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 @router.get("/credits/{user_id}")
 async def get_credits(

@@ -6,6 +6,8 @@ import aiohttp
 from utils.ai import system_prompt, get_user_prompt
 from services.database_service import get_record_by_task_id
 
+model = "o3-mini"
+
 async def generate_with_openai(texts: list[str], user_input: str) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
@@ -36,7 +38,8 @@ async def generate_with_openai(texts: list[str], user_input: str) -> dict:
         # Prepare the request payload with conversation format
         payload = {
             "messages": conversation,
-            "model": "gpt-4o-mini"
+            "model": model,
+            "high": True
         }
 
         # Make POST request to AWS service
@@ -48,7 +51,7 @@ async def generate_with_openai(texts: list[str], user_input: str) -> dict:
                     return {
                         "success": True,
                         "analysis": result.get("response", ""),
-                        "service": "openai_gpt4",
+                        "service": model,
                         "conversation": conversation
                     }
                 else:
@@ -127,7 +130,8 @@ async def debug_with_openai(texts: list[str], user_input: str, task_id: str) -> 
         # Prepare the request payload with conversation format
         payload = {
             "messages": conversation,
-            "model": "gpt-4o-mini"
+            "model": model,
+            "high": True
         }
 
         # Make POST request to AWS service
@@ -144,7 +148,7 @@ async def debug_with_openai(texts: list[str], user_input: str, task_id: str) -> 
                     return {
                         "success": True,
                         "analysis": result.get("response", ""),
-                        "service": "openai_gpt4",
+                        "service": model,
                         "conversation": conversation
                     }
                 else:
