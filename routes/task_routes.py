@@ -31,7 +31,9 @@ async def upload_image(
     authorization: Optional[str] = Header(None, description="Bearer token for authentication"),
     response: Response = None,
     user_id: str = Form(..., description="User ID of the uploader"),
-    user_input = Form(..., description="User Input")
+    user_input = Form(..., description="User Input"),
+    language: str = Form(..., description="Language of the user input"),
+    model: str = Form(..., description="Model to use for the task")
 ):
     try:
         # Validate files parameter
@@ -101,7 +103,9 @@ async def upload_image(
             task_id=task_id,
             images=images,
             user_id=user_id,
-            user_input=user_input
+            user_input=user_input,
+            language=language,
+            model=model
         ))
         
         # Return task information

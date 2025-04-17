@@ -3,12 +3,10 @@ import os
 import asyncio
 from typing import Dict, Any
 import aiohttp
-from utils.ai import system_prompt, get_user_prompt
+from utils.ai import system_prompt, get_user_prompt, get_payload
 from services.database_service import get_record_by_task_id
 
-model = "o3-mini"
-
-async def generate_with_openai(texts: list[str], user_input: str) -> dict:
+async def generate_with_openai(texts: list[str], user_input: str, language: str, model: str) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
     Args:
@@ -30,22 +28,26 @@ async def generate_with_openai(texts: list[str], user_input: str) -> dict:
             f"Text {i+1}:\n{text}" for i, text in enumerate(texts)
         ])
 
-        conversation = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": get_user_prompt('generate', 'python', combined_text, user_input)}
-        ]
-
-        # Prepare the request payload with conversation format
-        payload = {
-            "messages": conversation,
-            "model": model,
-            "high": True
-        }
+        # Create conversation based on model type
+        if "gpt" not in model:
+            # For Claude, system message goes in a separate parameter
+            conversation = [
+                {"role": "user", "content": get_user_prompt('generate', language, combined_text, user_input)}
+            ]
+            payload = get_payload(conversation, model)
+        else:
+            # For other models, system message is part of the conversation
+            conversation = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": get_user_prompt('generate', language, combined_text, user_input)}
+            ]
+            payload = get_payload(conversation, model)
 
         # Make POST request to AWS service
         async with aiohttp.ClientSession() as session:
             # Add /chat endpoint to the URL
-            async with session.post(f"{ai_service_url}/chat", json=payload) as response:
+            endpoint = "/gpt-chat" if "gpt" in model else "/claude-chat"
+            async with session.post(f"{ai_service_url}{endpoint}", json=payload) as response:
                 if response.status == 200:
                     result = await response.json()
                     return {
@@ -71,7 +73,7 @@ async def generate_with_openai(texts: list[str], user_input: str) -> dict:
         }
         
     
-async def debug_with_openai(texts: list[str], user_input: str, task_id: str) -> dict:
+async def debug_with_openai(texts: list[str], user_input: str, language: str, model: str, task_id: str) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
     Args:
@@ -113,31 +115,44 @@ async def debug_with_openai(texts: list[str], user_input: str, task_id: str) -> 
             f"Text {i+1}:\n{text}" for i, text in enumerate(texts)
         ])
 
-        # If no existing conversation or empty conversation, create new one
-        if not existing_conversation:
-            conversation = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": get_user_prompt('generate', 'python', combined_text, user_input)}
-            ]
+        # Create conversation based on model type
+        if model == "claude-3-7-sonnet-20250219":
+            # For Claude, system message goes in a separate parameter
+            if not existing_conversation:
+                conversation = [
+                    {"role": "user", "content": get_user_prompt('generate', language, combined_text, user_input)}
+                ]
+            else:
+                conversation = existing_conversation.copy()
+                conversation.append({
+                    "role": "user",
+                    "content": get_user_prompt('debug', language, combined_text, user_input)
+                })
+            payload = {
+                "messages": conversation,
+                "model": model,
+                "system": system_prompt
+            }
         else:
-            # Use existing conversation and append new message
-            conversation = existing_conversation.copy()  # Create a copy to avoid modifying the original
-            conversation.append({
-                "role": "user",
-                "content": get_user_prompt('debug', 'python', combined_text, user_input)
-            })
-
-        # Prepare the request payload with conversation format
-        payload = {
-            "messages": conversation,
-            "model": model,
-            "high": True
-        }
+            # For other models, system message is part of the conversation
+            if not existing_conversation:
+                conversation = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": get_user_prompt('generate', language, combined_text, user_input)}
+                ]
+            else:
+                conversation = existing_conversation.copy()
+                conversation.append({
+                    "role": "user",
+                    "content": get_user_prompt('debug', language, combined_text, user_input)
+                })
+            payload = get_payload(conversation, model)
 
         # Make POST request to AWS service
         async with aiohttp.ClientSession() as session:
             # Add /chat endpoint to the URL
-            async with session.post(f"{ai_service_url}/chat", json=payload) as response:
+            endpoint = "/claude-chat" if model == "claude-3-7-sonnet-20250219" else "/gpt-chat"
+            async with session.post(f"{ai_service_url}{endpoint}", json=payload) as response:
                 if response.status == 200:
                     result = await response.json()
                     # Append assistant's response to conversation

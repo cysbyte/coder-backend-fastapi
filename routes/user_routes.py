@@ -31,6 +31,10 @@ class UpdateUserNameRequest(BaseModel):
     first_name: str
     last_name: str
 
+class CreateUserRequest(BaseModel):
+    user_id: str
+    email: str
+
 @router.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
     """
@@ -49,6 +53,55 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
     except WebSocketDisconnect:
         await manager.disconnect(websocket, user_id)
         print(f"User {user_id} disconnected")
+
+@router.post("/create")
+async def create_user(
+    request: CreateUserRequest,
+    authorization: Optional[str] = Header(None, description="Bearer token for authentication"),
+    response: Response = None
+):
+    """
+    Create a new user record in the users table
+    """
+    try:
+        # Validate the access token
+        user, token_refreshed = await validate_access_token(authorization, response)
+        
+        # Check if user already exists
+        existing_user = supabase.table('users').select("*").eq('id', request.user_id).execute()
+        
+        if existing_user.data and len(existing_user.data) > 0:
+            return {
+                "success": True,
+                "data": existing_user.data[0],
+                "token_refreshed": token_refreshed
+            }
+        
+        # Insert new user record
+        result = supabase.table('users').insert({
+            'id': request.user_id,
+            'email': request.email,
+        }).execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to create user"
+            )
+            
+        return {
+            "success": True,
+            "data": result.data[0],
+            "token_refreshed": token_refreshed
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 @router.post("/payment_successful/{user_id}")
 async def payment_successful(

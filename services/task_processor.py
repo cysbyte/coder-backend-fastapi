@@ -14,7 +14,9 @@ async def process_generate_task(
     task_id: str,
     images: list[dict],  # List of dicts containing image_content and filename
     user_id: str,
-    user_input: str
+    user_input: str,
+    language: str,
+    model: str
 ):
     try:
         # Send start message
@@ -112,7 +114,7 @@ async def process_generate_task(
             "total_images": len(images)
         })
         
-        ai_result = await generate_with_openai(ocr_result["texts"], user_input)
+        ai_result = await generate_with_openai(ocr_result["texts"], user_input, language, model)
         
         if not ai_result["success"]:
             await update_record_status(record["id"], {

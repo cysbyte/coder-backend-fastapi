@@ -78,3 +78,23 @@ def get_user_prompt(mode, language, ocr_text, user_input):
 {user_input}
 
 """
+
+def get_payload(conversation, model):
+    if(model == "gpt-o3-mini-high"):
+        return {
+            "messages": conversation,
+            "model": "o3-mini",
+            "high": True
+        }
+    elif(model == "gpt-4o"):
+        return {
+            "messages": conversation,
+            "model": "gpt-4o",
+        }
+    else:
+        return {
+            "messages": conversation,
+            "model": "claude-3-7-sonnet-20250219",
+            "extended_thinking": True,
+            "system": system_prompt
+        }
