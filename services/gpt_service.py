@@ -1,10 +1,12 @@
 from openai import OpenAI
 import os
 import asyncio
-from typing import Dict, Any
+from typing import Dict, Any, List
 import aiohttp
-from utils.ai import system_prompt, get_user_prompt, get_payload
+import base64
+from utils.ai import system_prompt, get_user_prompt, get_gpt_payload, get_claude_payload
 from services.database_service import get_record_by_task_id
+
 
 async def generate_with_openai(texts: list[str], user_input: str, language: str, model: str) -> dict:
     """
@@ -28,26 +30,16 @@ async def generate_with_openai(texts: list[str], user_input: str, language: str,
             f"Text {i+1}:\n{text}" for i, text in enumerate(texts)
         ])
 
-        # Create conversation based on model type
-        if "gpt" not in model:
-            # For Claude, system message goes in a separate parameter
-            conversation = [
-                {"role": "user", "content": get_user_prompt('generate', language, combined_text, user_input)}
-            ]
-            payload = get_payload(conversation, model)
-        else:
-            # For other models, system message is part of the conversation
-            conversation = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": get_user_prompt('generate', language, combined_text, user_input)}
-            ]
-            payload = get_payload(conversation, model)
+        conversation = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": get_user_prompt('generate', language, combined_text, user_input)}
+        ]
+        payload = get_gpt_payload(conversation, model)
 
         # Make POST request to AWS service
         async with aiohttp.ClientSession() as session:
             # Add /chat endpoint to the URL
-            endpoint = "/gpt-chat" if "gpt" in model else "/claude-chat"
-            async with session.post(f"{ai_service_url}{endpoint}", json=payload) as response:
+            async with session.post(f"{ai_service_url}/gpt-chat", json=payload) as response:
                 if response.status == 200:
                     result = await response.json()
                     return {
@@ -116,7 +108,7 @@ async def debug_with_openai(texts: list[str], user_input: str, language: str, mo
         ])
 
         # Create conversation based on model type
-        if model == "claude-3-7-sonnet-20250219":
+        if "gpt" not in model:
             # For Claude, system message goes in a separate parameter
             if not existing_conversation:
                 conversation = [
@@ -128,11 +120,7 @@ async def debug_with_openai(texts: list[str], user_input: str, language: str, mo
                     "role": "user",
                     "content": get_user_prompt('debug', language, combined_text, user_input)
                 })
-            payload = {
-                "messages": conversation,
-                "model": model,
-                "system": system_prompt
-            }
+            payload = get_gpt_payload(conversation, model)
         else:
             # For other models, system message is part of the conversation
             if not existing_conversation:
@@ -151,7 +139,7 @@ async def debug_with_openai(texts: list[str], user_input: str, language: str, mo
         # Make POST request to AWS service
         async with aiohttp.ClientSession() as session:
             # Add /chat endpoint to the URL
-            endpoint = "/claude-chat" if model == "claude-3-7-sonnet-20250219" else "/gpt-chat"
+            endpoint = "/gpt-chat" if "gpt" in model else "/claude-chat"
             async with session.post(f"{ai_service_url}{endpoint}", json=payload) as response:
                 if response.status == 200:
                     result = await response.json()
@@ -181,7 +169,78 @@ async def debug_with_openai(texts: list[str], user_input: str, language: str, mo
             "success": False,
             "error": str(e)
         }
+    
 
+async def generate_with_openai_multimodal(text: str, images: List[str], language: str = "python", model: str = "o4-mini") -> dict:
+    """
+    Process text and images using GPT-4o-mini model with multi-modal capabilities
+    Args:
+        text: Text input from the user
+        images: List of base64 encoded images
+        language: Programming language for code generation (default: python)
+    Returns:
+        dict containing success status and analysis results
+    """
+    try:
+        # AWS service API endpoint
+        ai_service_url = os.getenv('AI_SERVICE_URL')
+        if not ai_service_url:
+            return {
+                "success": False,
+                "error": "AWS service URL not found in environment variables"
+            }
+        
+        # Prepare the conversation with text and images
+        conversation = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user", 
+                "content": [
+                    {"type": "text", "text": get_user_prompt('generate', language, "", text)}
+                ]
+            }
+        ]
+        
+        # Add images to the conversation if provided
+        if images and len(images) > 0:
+            for image in images:
+                conversation[1]["content"].append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{image}"
+                    }
+                })
+        
+        # Prepare the request payload
+        payload = get_gpt_payload(conversation, model)
+        
+        # Make POST request to AWS service
+        async with aiohttp.ClientSession() as session:
+            async with session.post(f"{ai_service_url}/gpt-chat", json=payload) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return {
+                        "success": True,
+                        "analysis": result.get("response", ""),
+                        "service": model,
+                        "conversation": conversation
+                    }
+                else:
+                    error_text = await response.text()
+                    print(f"AI Service Error Response: {error_text}")  # Add logging
+                    return {
+                        "success": False,
+                        "error": f"AI service error: {error_text}",
+                        "status_code": response.status
+                    }
+                    
+    except Exception as e:
+        print(f"Multi-modal Processing Error: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        } 
+    
 async def process_with_openai_mock(ocr_text: str) -> Dict[str, Any]:
     """
     Mock AI analysis function that simulates processing time and returns predefined analysis
@@ -283,4 +342,4 @@ async def process_with_openai_mock_with_type(ocr_text: str, mock_type: str = "tw
         return {
             "success": False,
             "error": str(e)
-        } 
+        }
