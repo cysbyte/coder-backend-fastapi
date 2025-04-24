@@ -243,7 +243,8 @@ async def debug(
     user_input: str = Form(..., description="User Input"),
     response: Response = None,
     model: str = Form(..., description="Model to use for the task"),
-    language: str = Form(..., description="Language of the user input")
+    language: str = Form(..., description="Language of the user input"),
+    round: int = Form(..., description="Round number")
 ):
     try:
         # Validate number of files
@@ -305,7 +306,8 @@ async def debug(
             images=images,
             user_input=user_input,
             language=language,
-            model=model
+            model=model,
+            round=round
         ))
         
         # Return task information

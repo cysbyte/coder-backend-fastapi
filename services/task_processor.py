@@ -131,7 +131,7 @@ async def process_generate(
         # Update record with conversation
         await update_record_status(record["id"], {
             "ai_analysis": ai_result["analysis"],
-            "ai_service": "openai_gpt4",
+            "ai_service": model,
             "conversation": conversation,
             "current_conversation": conversation,
         })
@@ -187,7 +187,8 @@ async def process_debug(
     user_input: str,
     images: Optional[list[dict]] = None,  # Make images optional
     language: str = "Python",
-    model: str = "gpt-o3-mini"
+    model: str = "gpt-o3-mini",
+    round: int = 0
 ):
     """
     Process a single image with OCR and combine with message for AI analysis
@@ -232,7 +233,8 @@ async def process_debug(
             "file_names": [image["filename"] for image in images],
             # "user_id": user_id,
             "file_type": "image/png",
-            "total_images": len(images)
+            "total_images": len(images),
+            "round": round
         }
 
         save_result = await save_image_record_for_debug(initial_record)
@@ -298,7 +300,7 @@ async def process_debug(
         # Update record with new conversation
         await update_record_status_for_debug(record["id"], {
             "ai_analysis": ai_result["analysis"],
-            "ai_service": "openai_gpt4",
+            "ai_service": model,
             "conversation": ai_result["conversation"]
         })
 
