@@ -241,7 +241,9 @@ async def debug(
     user_id: str = Form(..., description="User ID of the uploader"),
     task_id: str = Form(..., description="Task ID"),
     user_input: str = Form(..., description="User Input"),
-    response: Response = None
+    response: Response = None,
+    model: str = Form(..., description="Model to use for the task"),
+    language: str = Form(..., description="Language of the user input")
 ):
     try:
         # Validate number of files
@@ -302,6 +304,8 @@ async def debug(
             task_id=task_id,
             images=images,
             user_input=user_input,
+            language=language,
+            model=model
         ))
         
         # Return task information

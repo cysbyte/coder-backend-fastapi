@@ -35,6 +35,33 @@ async def save_image_record(image_data: dict):
             "error": str(e)
         } 
     
+async def save_image_record_for_debug(image_data: dict):
+    try:
+        response = supabase.table('debugs').insert(image_data).execute()
+        return {
+            "success": True,
+            "data": response.data[0]
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        } 
+    
+async def update_record_status_for_debug(record_id: str, update_data: dict):
+    """Helper function to update record status in Supabase"""
+    try:
+        response = supabase.table('debugs').update(update_data).eq('id', record_id).execute()
+        return {
+            "success": True,
+            "data": response.data[0]
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        } 
+    
 async def get_record_by_task_id(task_id: str) -> dict:
     """
     Fetch a record by task_id from Supabase

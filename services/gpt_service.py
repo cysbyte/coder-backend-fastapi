@@ -94,7 +94,7 @@ async def debug_with_openai(texts: list[str], user_input: str, language: str, mo
 
         record = record_result["data"]
         # Ensure existing_conversation is a list
-        existing_conversation = record.get("conversation", [])
+        existing_conversation = record.get("current_conversation", [])
         if isinstance(existing_conversation, str):
             try:
                 import json
@@ -109,32 +109,19 @@ async def debug_with_openai(texts: list[str], user_input: str, language: str, mo
 
         # Create conversation based on model type
         if "gpt" not in model:
-            # For Claude, system message goes in a separate parameter
-            if not existing_conversation:
-                conversation = [
-                    {"role": "user", "content": get_user_prompt('generate', language, combined_text, user_input)}
-                ]
-            else:
-                conversation = existing_conversation.copy()
-                conversation.append({
-                    "role": "user",
-                    "content": get_user_prompt('debug', language, combined_text, user_input)
-                })
+            conversation = existing_conversation.copy()
+            conversation.append({
+                "role": "user",
+                "content": get_user_prompt('debug', language, combined_text, user_input)
+            })
             payload = get_gpt_payload(conversation, model)
         else:
-            # For other models, system message is part of the conversation
-            if not existing_conversation:
-                conversation = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": get_user_prompt('generate', language, combined_text, user_input)}
-                ]
-            else:
-                conversation = existing_conversation.copy()
-                conversation.append({
-                    "role": "user",
-                    "content": get_user_prompt('debug', language, combined_text, user_input)
-                })
-            payload = get_payload(conversation, model)
+            conversation = existing_conversation.copy()
+            conversation.append({
+                "role": "user",
+                "content": get_user_prompt('debug', language, combined_text, user_input)
+            })
+            payload = get_gpt_payload(conversation, model)
 
         # Make POST request to AWS service
         async with aiohttp.ClientSession() as session:
