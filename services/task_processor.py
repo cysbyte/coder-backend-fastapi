@@ -18,7 +18,8 @@ async def process_generate(
     user_id: str,
     user_input: str,
     language: str,
-    model: str
+    model: str,
+    speech: str
 ):
     try:
         # Send start message
@@ -109,9 +110,9 @@ async def process_generate(
         })
         
         if 'gpt' in model:
-            ai_result = await generate_with_openai(ocr_result["texts"], user_input, language, model, task_id)
+            ai_result = await generate_with_openai(ocr_result["texts"], user_input, language, model, task_id, speech)
         elif 'claude' in model:
-            ai_result = await generate_with_anthropic(ocr_result["texts"], user_input, language, model, task_id)
+            ai_result = await generate_with_anthropic(ocr_result["texts"], user_input, language, model, task_id, speech)
         
         if not ai_result["success"]:
             
@@ -188,7 +189,8 @@ async def process_debug(
     images: Optional[list[dict]] = None,  # Make images optional
     language: str = "Python",
     model: str = "gpt-o3-mini",
-    round: int = 0
+    round: int = 0,
+    speech: str = None
 ):
     """
     Process a single image with OCR and combine with message for AI analysis
@@ -284,9 +286,9 @@ async def process_debug(
         })
 
         if 'gpt' in model:
-            ai_result = await debug_with_openai(ocr_result["texts"], user_input, language, model, task_id)
+            ai_result = await debug_with_openai(ocr_result["texts"], user_input, language, model, task_id, speech)
         elif 'claude' in model:
-            ai_result = await debug_with_anthropic(ocr_result["texts"], user_input, language, model, task_id)
+            ai_result = await debug_with_anthropic(ocr_result["texts"], user_input, language, model, task_id, speech)
         
         if not ai_result["success"]:
             
@@ -352,7 +354,8 @@ async def process_generate_multimodal(
     user_id: str,
     user_input: str,
     language: str,
-    model: str
+    model: str,
+    speech: str
 ):
     """
     Process images with OCR and then use multimodal AI analysis
@@ -465,7 +468,8 @@ async def process_generate_multimodal(
                 images=base64_images,
                 language=language,
                 model=model,
-                task_id=task_id
+                task_id=task_id,
+                speech=speech
             )
         elif 'claude' in model:
             ai_result = await generate_with_anthropic(
@@ -473,7 +477,8 @@ async def process_generate_multimodal(
                 user_input=user_input,
                 language=language,
                 model=model,
-                task_id=task_id
+                task_id=task_id,
+                speech=speech
             )
         
         if not ai_result["success"]:

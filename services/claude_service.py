@@ -6,7 +6,7 @@ import base64
 import json
 from services.database_service import get_record_by_task_id, update_record_status
 
-async def generate_with_anthropic(texts: list[str], user_input: str, language: str, model: str, task_id: str) -> dict:
+async def generate_with_anthropic(texts: list[str], user_input: str, language: str, model: str, task_id: str, speech: str) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
     Args:
@@ -33,7 +33,7 @@ async def generate_with_anthropic(texts: list[str], user_input: str, language: s
         ])
 
         conversation = [
-            {"role": "user", "content": get_user_prompt('generate', language, combined_text, user_input)}
+            {"role": "user", "content": get_user_prompt('generate', language, combined_text, user_input, speech)}
         ]
         payload = get_claude_payload(conversation, model)
 
@@ -170,7 +170,7 @@ async def generate_with_anthropic(texts: list[str], user_input: str, language: s
             "error": str(e)
         } 
 
-async def debug_with_anthropic(texts: list[str], user_input: str, language: str, model: str, task_id: str) -> dict:
+async def debug_with_anthropic(texts: list[str], user_input: str, language: str, model: str, task_id: str, speech: str) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
     Args:
@@ -215,7 +215,7 @@ async def debug_with_anthropic(texts: list[str], user_input: str, language: str,
         conversation = existing_conversation.copy()
         conversation.append({
             "role": "user",
-            "content": get_user_prompt('debug', language, combined_text, user_input)
+            "content": get_user_prompt('debug', language, combined_text, user_input, speech)
         })
         payload = get_claude_payload(conversation, model)
 

@@ -2,6 +2,7 @@ system_prompt = """
 You are an AI coding assistant helping a user solve an algorithm coding problem in a live interview setting. The user will leverage your output to answer the coding question set by the interviewer. The user will provide the following:
 Mode: The action that the user would like you to take - Generate/Debug
 Programming Language: The selected programming language that you should output for all code output
+Speech (Optional): The prior conversation between the interviewer and interviewee for context
 OCR Text (Optional): The parsed OCR text through screenshots of the user screen, which often would contain the problem
 User Text Input (Optional): Text input by the user
 
@@ -147,8 +148,8 @@ def fixed_function():
   - Time/space complexity implications
 """
 
-def get_user_prompt(mode, language, ocr_text, user_input):
-    if ocr_text and ocr_text != "":
+def get_user_prompt(mode, language, ocr_text, user_input, speech):
+
         return f"""
 *Mode*: 
 {mode}
@@ -159,17 +160,8 @@ def get_user_prompt(mode, language, ocr_text, user_input):
 *OCR Text*:
 {ocr_text}
 
-*User Text Input*:
-{user_input}
-
-"""
-    else:
-        return f"""
-*Mode*: 
-{mode}
-
-*Programming Language*: 
-{language}
+*Prior Conversation Context*:
+{speech}
 
 *User Text Input*:
 {user_input}

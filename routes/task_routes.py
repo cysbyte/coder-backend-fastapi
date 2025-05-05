@@ -235,7 +235,8 @@ async def upload_image(
     user_id: str = Form(..., description="User ID of the uploader"),
     user_input = Form(..., description="User Input"),
     language: str = Form(..., description="Language of the user input"),
-    model: str = Form(..., description="Model to use for the task")
+    model: str = Form(..., description="Model to use for the task"),
+    speech: str = Form(..., description="Speech of the user input")
 ):
     try:
         # Validate files parameter
@@ -307,7 +308,8 @@ async def upload_image(
             user_id=user_id,
             user_input=user_input,
             language=language,
-            model=model
+            model=model,
+            speech=speech
         ))
         
         # Return task information
@@ -341,7 +343,8 @@ async def debug(
     response: Response = None,
     model: str = Form(..., description="Model to use for the task"),
     language: str = Form(..., description="Language of the user input"),
-    round: int = Form(..., description="Round number")
+    round: int = Form(..., description="Round number"),
+    speech: str = Form(..., description="Speech of the user input")
 ):
     try:
         # Validate number of files
@@ -404,7 +407,8 @@ async def debug(
             user_input=user_input,
             language=language,
             model=model,
-            round=round
+            round=round,
+            speech=speech
         ))
         
         # Return task information

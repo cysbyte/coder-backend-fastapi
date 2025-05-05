@@ -8,7 +8,7 @@ from utils.ai import system_prompt, get_user_prompt, get_gpt_payload, get_claude
 from services.database_service import get_record_by_task_id, update_record_status
 import json
 
-async def generate_with_openai(texts: list[str], user_input: str, language: str, model: str, task_id: str) -> dict:
+async def generate_with_openai(texts: list[str], user_input: str, language: str, model: str, task_id: str, speech: str) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
     Args:
@@ -32,7 +32,7 @@ async def generate_with_openai(texts: list[str], user_input: str, language: str,
 
         conversation = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": get_user_prompt('generate', language, combined_text, user_input)}
+            {"role": "user", "content": get_user_prompt('generate', language, combined_text, user_input, speech)}
         ]
         payload = get_gpt_payload(conversation, model)
 
@@ -65,7 +65,7 @@ async def generate_with_openai(texts: list[str], user_input: str, language: str,
         }
         
     
-async def debug_with_openai(texts: list[str], user_input: str, language: str, model: str, task_id: str) -> dict:
+async def debug_with_openai(texts: list[str], user_input: str, language: str, model: str, task_id: str, speech: str) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
     Args:
@@ -110,7 +110,7 @@ async def debug_with_openai(texts: list[str], user_input: str, language: str, mo
         conversation = existing_conversation.copy()
         conversation.append({
             "role": "user",
-            "content": get_user_prompt('debug', language, combined_text, user_input)
+            "content": get_user_prompt('debug', language, combined_text, user_input, speech)
         })
         payload = get_gpt_payload(conversation, model)
 
@@ -143,7 +143,7 @@ async def debug_with_openai(texts: list[str], user_input: str, language: str, mo
         }
     
 
-async def generate_with_openai_multimodal(ocr_text: str, text: str, images: List[str], language: str = "python", model: str = "o4-mini", task_id: str = None) -> dict:
+async def generate_with_openai_multimodal(ocr_text: str, text: str, images: List[str], language: str = "python", model: str = "o4-mini", task_id: str = None, speech: str = None) -> dict:
     """
     Process text and images using GPT-4o-mini model with multi-modal capabilities
     Args:
@@ -168,7 +168,7 @@ async def generate_with_openai_multimodal(ocr_text: str, text: str, images: List
             {
                 "role": "user", 
                 "content": [
-                    {"type": "text", "text": get_user_prompt('generate', language, ocr_text, text)}
+                    {"type": "text", "text": get_user_prompt('generate', language, ocr_text, text, speech)}
                 ]
             }
         ]
@@ -213,7 +213,7 @@ async def generate_with_openai_multimodal(ocr_text: str, text: str, images: List
             "error": str(e)
         } 
     
-async def debug_with_openai_multimodal(texts: list[str], user_input: str, language: str, model: str, task_id: str) -> dict:
+async def debug_with_openai_multimodal(texts: list[str], user_input: str, language: str, model: str, task_id: str, speech: str) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
     Args:
@@ -258,7 +258,7 @@ async def debug_with_openai_multimodal(texts: list[str], user_input: str, langua
         conversation = existing_conversation.copy()
         conversation.append({
             "role": "user",
-            "content": get_user_prompt('debug', language, combined_text, user_input)
+            "content": get_user_prompt('debug', language, combined_text, user_input, speech)
         })
         payload = get_gpt_payload(conversation, model)
 
