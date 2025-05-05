@@ -3,12 +3,18 @@ from typing import List
 import os
 import aiohttp
 import base64
+import json
+from services.database_service import get_record_by_task_id, update_record_status
 
-async def generate_with_anthropic(texts: list[str], user_input: str, language: str, model: str) -> dict:
+async def generate_with_anthropic(texts: list[str], user_input: str, language: str, model: str, task_id: str) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
     Args:
         texts: List of OCR texts to analyze
+        user_input: User's input
+        language: Programming language for code generation (default: python)
+        model: Claude model to use (default: claude-3-5-sonnet-20240620)
+        task_id: Task ID to fetch existing conversation
     Returns:
         dict containing success status and analysis results
     """
@@ -59,8 +65,6 @@ async def generate_with_anthropic(texts: list[str], user_input: str, language: s
             "error": str(e)
         }
         
-
-async def generate_with_anthropic_multimodal(text: str, images: List[str], language: str = "python", model: str = "claude-3-5-sonnet-20240620") -> dict:
     """
     Process text and images using Claude model with multi-modal capabilities
     Args:
@@ -165,3 +169,80 @@ async def generate_with_anthropic_multimodal(text: str, images: List[str], langu
             "success": False,
             "error": str(e)
         } 
+
+async def debug_with_anthropic(texts: list[str], user_input: str, language: str, model: str, task_id: str) -> dict:
+    """
+    Process OCR texts using AWS service API with GPT-4
+    Args:
+        texts: List of OCR texts to analyze
+        message: User's debug message
+        task_id: Task ID to fetch existing conversation
+    Returns:
+        dict containing success status and analysis results
+    """
+    try:
+        # AWS service API endpoint
+        ai_service_url = os.getenv('AI_SERVICE_URL')
+        if not ai_service_url:
+            return {
+                "success": False,
+                "error": "AWS service URL not found in environment variables"
+            }
+
+        # Fetch existing record and conversation
+        record_result = await get_record_by_task_id(task_id)
+        if not record_result["success"]:
+            return {
+                "success": False,
+                "error": f"Failed to fetch record: {record_result.get('error', 'Unknown error')}"
+            }
+
+        record = record_result["data"]
+        # Ensure existing_conversation is a list
+        existing_conversation = record.get("current_conversation", [])
+        if isinstance(existing_conversation, str):
+            try:
+                import json
+                existing_conversation = json.loads(existing_conversation)
+            except:
+                existing_conversation = []
+
+        # Prepare the prompt with all texts
+        combined_text = "\n\n".join([
+            f"Text {i+1}:\n{text}" for i, text in enumerate(texts)
+        ])
+
+        conversation = existing_conversation.copy()
+        conversation.append({
+            "role": "user",
+            "content": get_user_prompt('debug', language, combined_text, user_input)
+        })
+        payload = get_claude_payload(conversation, model)
+
+        # Make POST request to AWS service
+        async with aiohttp.ClientSession() as session:
+            # Add /chat endpoint to the URL
+            async with session.post(f"{ai_service_url}/claude-chat", json=payload) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return {
+                        "success": True,
+                        "analysis": result.get("response", ""),
+                        "service": model,
+                        "conversation": conversation
+                    }
+                else:
+                    error_text = await response.text()
+                    print(f"AI Service Error Response: {error_text}")  # Add logging
+                    return {
+                        "success": False,
+                        "error": f"AI service error: {error_text}",
+                        "status_code": response.status
+                    }
+
+    except Exception as e:
+        print(f"OpenAI Processing Error: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }

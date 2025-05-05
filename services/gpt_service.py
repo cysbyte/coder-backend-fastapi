@@ -5,10 +5,10 @@ from typing import Dict, Any, List
 import aiohttp
 import base64
 from utils.ai import system_prompt, get_user_prompt, get_gpt_payload, get_claude_payload
-from services.database_service import get_record_by_task_id
+from services.database_service import get_record_by_task_id, update_record_status
+import json
 
-
-async def generate_with_openai(texts: list[str], user_input: str, language: str, model: str) -> dict:
+async def generate_with_openai(texts: list[str], user_input: str, language: str, model: str, task_id: str) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
     Args:
@@ -107,34 +107,19 @@ async def debug_with_openai(texts: list[str], user_input: str, language: str, mo
             f"Text {i+1}:\n{text}" for i, text in enumerate(texts)
         ])
 
-        # Create conversation based on model type
-        if "gpt" not in model:
-            conversation = existing_conversation.copy()
-            conversation.append({
-                "role": "user",
-                "content": get_user_prompt('debug', language, combined_text, user_input)
-            })
-            payload = get_gpt_payload(conversation, model)
-        else:
-            conversation = existing_conversation.copy()
-            conversation.append({
-                "role": "user",
-                "content": get_user_prompt('debug', language, combined_text, user_input)
-            })
-            payload = get_gpt_payload(conversation, model)
+        conversation = existing_conversation.copy()
+        conversation.append({
+            "role": "user",
+            "content": get_user_prompt('debug', language, combined_text, user_input)
+        })
+        payload = get_gpt_payload(conversation, model)
 
         # Make POST request to AWS service
         async with aiohttp.ClientSession() as session:
             # Add /chat endpoint to the URL
-            endpoint = "/gpt-chat" if "gpt" in model else "/claude-chat"
-            async with session.post(f"{ai_service_url}{endpoint}", json=payload) as response:
+            async with session.post(f"{ai_service_url}/gpt-chat", json=payload) as response:
                 if response.status == 200:
                     result = await response.json()
-                    # Append assistant's response to conversation
-                    conversation.append({
-                        "role": "assistant",
-                        "content": result.get("response", "")
-                    })
                     return {
                         "success": True,
                         "analysis": result.get("response", ""),
@@ -158,7 +143,7 @@ async def debug_with_openai(texts: list[str], user_input: str, language: str, mo
         }
     
 
-async def generate_with_openai_multimodal(text: str, images: List[str], language: str = "python", model: str = "o4-mini") -> dict:
+async def generate_with_openai_multimodal(ocr_text: str, text: str, images: List[str], language: str = "python", model: str = "o4-mini", task_id: str = None) -> dict:
     """
     Process text and images using GPT-4o-mini model with multi-modal capabilities
     Args:
@@ -183,7 +168,7 @@ async def generate_with_openai_multimodal(text: str, images: List[str], language
             {
                 "role": "user", 
                 "content": [
-                    {"type": "text", "text": get_user_prompt('generate', language, "", text)}
+                    {"type": "text", "text": get_user_prompt('generate', language, ocr_text, text)}
                 ]
             }
         ]
@@ -227,6 +212,92 @@ async def generate_with_openai_multimodal(text: str, images: List[str], language
             "success": False,
             "error": str(e)
         } 
+    
+async def debug_with_openai_multimodal(texts: list[str], user_input: str, language: str, model: str, task_id: str) -> dict:
+    """
+    Process OCR texts using AWS service API with GPT-4
+    Args:
+        texts: List of OCR texts to analyze
+        message: User's debug message
+        task_id: Task ID to fetch existing conversation
+    Returns:
+        dict containing success status and analysis results
+    """
+    try:
+        # AWS service API endpoint
+        ai_service_url = os.getenv('AI_SERVICE_URL')
+        if not ai_service_url:
+            return {
+                "success": False,
+                "error": "AWS service URL not found in environment variables"
+            }
+
+        # Fetch existing record and conversation
+        record_result = await get_record_by_task_id(task_id)
+        if not record_result["success"]:
+            return {
+                "success": False,
+                "error": f"Failed to fetch record: {record_result.get('error', 'Unknown error')}"
+            }
+
+        record = record_result["data"]
+        # Ensure existing_conversation is a list
+        existing_conversation = record.get("current_conversation", [])
+        if isinstance(existing_conversation, str):
+            try:
+                import json
+                existing_conversation = json.loads(existing_conversation)
+            except:
+                existing_conversation = []
+
+        # Prepare the prompt with all texts
+        combined_text = "\n\n".join([
+            f"Text {i+1}:\n{text}" for i, text in enumerate(texts)
+        ])
+
+        conversation = existing_conversation.copy()
+        conversation.append({
+            "role": "user",
+            "content": get_user_prompt('debug', language, combined_text, user_input)
+        })
+        payload = get_gpt_payload(conversation, model)
+
+        # Make POST request to AWS service
+        async with aiohttp.ClientSession() as session:
+            # Add /chat endpoint to the URL
+            endpoint = "/gpt-chat" if "gpt" in model else "/claude-chat"
+            async with session.post(f"{ai_service_url}{endpoint}", json=payload) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    # Append assistant's response to conversation
+                    conversation.append({
+                        "role": "assistant",
+                        "content": result.get("response", "")
+                    })
+                    update_record_status(task_id, {
+                        "current_conversation": json.dumps(conversation)
+                    })
+                    return {
+                        "success": True,
+                        "analysis": result.get("response", ""),
+                        "service": model,
+                        "conversation": conversation
+                    }
+                else:
+                    error_text = await response.text()
+                    print(f"AI Service Error Response: {error_text}")  # Add logging
+                    return {
+                        "success": False,
+                        "error": f"AI service error: {error_text}",
+                        "status_code": response.status
+                    }
+
+    except Exception as e:
+        print(f"OpenAI Processing Error: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
     
 async def process_with_openai_mock(ocr_text: str) -> Dict[str, Any]:
     """

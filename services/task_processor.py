@@ -1,8 +1,8 @@
 import asyncio
 from typing import Optional
 from services.ocr_service import ocr_parse
-from services.gpt_service import generate_with_openai, debug_with_openai, generate_with_openai_multimodal
-from services.claude_service import generate_with_anthropic, generate_with_anthropic_multimodal
+from services.gpt_service import generate_with_openai, debug_with_openai, generate_with_openai_multimodal, debug_with_openai_multimodal
+from services.claude_service import generate_with_anthropic, debug_with_anthropic
 from services.websocket_service import manager
 from services.storage_service import upload_to_storage
 from services.database_service import update_record_status, save_image_record, update_user_credits, save_image_record_for_debug, update_record_status_for_debug
@@ -109,9 +109,9 @@ async def process_generate(
         })
         
         if 'gpt' in model:
-            ai_result = await generate_with_openai(ocr_result["texts"], user_input, language, model)
+            ai_result = await generate_with_openai(ocr_result["texts"], user_input, language, model, task_id)
         elif 'claude' in model:
-            ai_result = await generate_with_anthropic(ocr_result["texts"], user_input, language, model)
+            ai_result = await generate_with_anthropic(ocr_result["texts"], user_input, language, model, task_id)
         
         if not ai_result["success"]:
             
@@ -286,7 +286,7 @@ async def process_debug(
         if 'gpt' in model:
             ai_result = await debug_with_openai(ocr_result["texts"], user_input, language, model, task_id)
         elif 'claude' in model:
-            ai_result = await generate_with_anthropic(ocr_result["texts"], user_input, language, model, task_id)
+            ai_result = await debug_with_anthropic(ocr_result["texts"], user_input, language, model, task_id)
         
         if not ai_result["success"]:
             
@@ -460,17 +460,20 @@ async def process_generate_multimodal(
         if 'gpt' in model:
             # Call multimodal AI service
             ai_result = await generate_with_openai_multimodal(
+                ocr_text=ocr_result["texts"][0],
                 text=user_input,
                 images=base64_images,
                 language=language,
-                model=model
+                model=model,
+                task_id=task_id
             )
         elif 'claude' in model:
-            ai_result = await generate_with_anthropic_multimodal(
-                text=user_input,
-                images=base64_images,
+            ai_result = await generate_with_anthropic(
+                texts=ocr_result["texts"],
+                user_input=user_input,
                 language=language,
-                model=model
+                model=model,
+                task_id=task_id
             )
         
         if not ai_result["success"]:
@@ -537,3 +540,167 @@ async def process_generate_multimodal(
             "message": str(e)
         })
 
+async def process_multimodal_debug(
+    task_id: str,
+    user_id: str,
+    user_input: str,
+    images: Optional[list[dict]] = None,  # Make images optional
+    language: str = "Python",
+    model: str = "gpt-o3-mini",
+    round: int = 0
+):
+    """
+    Process a single image with OCR and combine with message for AI analysis
+    Args:
+        task_id: Unique task identifier
+        user_id: User ID of the requester
+        user_input: Additional message to combine with OCR text
+        images: Optional list of dicts containing image content and filename
+    """
+    try:
+        storage_results = []
+        for index, image in enumerate(images):
+            await manager.send_message(task_id, {
+                "status": "uploading",
+                "message": f"Uploading image {index + 1} of {len(images)}",
+                "current_image": index + 1,
+                "total_images": len(images)
+            })
+
+            storage_result = await upload_to_storage(
+                file_content=image["content"],
+                file_name=image["filename"],
+                content_type="image/png"    
+            )
+
+            if not storage_result["success"]:
+                await manager.send_message(task_id, {
+                    "status": "storage error",
+                    "message": f"Failed to upload image {image['filename']}: {storage_result.get('error', 'Unknown error')}",
+                    "current_image": index + 1,
+                    "total_images": len(images)
+                })
+                continue
+
+            storage_results.append(storage_result)
+
+        # Create a single record with arrays of URLs and filenames
+        initial_record = {
+            "id": str(uuid.uuid4()),
+            "task_id": task_id,
+            "image_urls": [result["file_url"] for result in storage_results],
+            "file_names": [image["filename"] for image in images],
+            # "user_id": user_id,
+            "file_type": "image/png",
+            "total_images": len(images),
+            "round": round
+        }
+
+        save_result = await save_image_record_for_debug(initial_record)
+        
+        if not save_result["success"]:
+            await manager.send_message(task_id, {
+                "status": "save error",
+                "message": f"Failed to create record: {save_result.get('error', 'Unknown error')}"
+            })
+            return
+
+        record = save_result["data"]
+
+        # OCR Processing for all images
+        await manager.send_message(task_id, {
+            "status": "ocr processing",
+            "step": "ocr",
+            "message": "Performing OCR analysis for all images",
+            "total_images": len(images)
+        })
+        # Initialize OCR result
+        ocr_result = {"success": True, "texts": []}
+        
+        # Only perform OCR if images are provided
+        if images:
+            ocr_result = await ocr_parse(images)
+            
+            if not ocr_result["success"]:
+                return {
+                    "success": False,
+                    "error": ocr_result.get("error", "OCR processing failed")
+                }
+            
+            # Update record with OCR results
+            await update_record_status_for_debug(record["id"], {
+                "ocr_texts": ocr_result["texts"],
+                "ocr_service": "google_vision"
+            })
+
+        await manager.send_message(task_id, {
+            "status": "ocr completed",
+            "step": "ocr",
+            "message": "OCR analysis completed for all images",
+            "data": {
+                "texts": ocr_result["texts"]
+            }
+        })
+
+        if 'gpt' in model:
+            ai_result = await debug_with_openai_multimodal(ocr_result["texts"], user_input, language, model, task_id)
+        elif 'claude' in model:
+            ai_result = await debug_with_anthropic(ocr_result["texts"], user_input, language, model, task_id)
+        
+        if not ai_result["success"]:
+            
+            await manager.send_message(task_id, {
+                "status": "ai error",
+                "step": "ai",
+                "message": f"AI analysis failed: {ai_result.get('error', 'AI analysis failed')}"
+            })
+            return
+
+        # Update record with new conversation
+        await update_record_status_for_debug(record["id"], {
+            "ai_analysis": ai_result["analysis"],
+            "ai_service": model,
+            "conversation": ai_result["conversation"]
+        })
+
+        await update_record_status(record["task_id"], {
+            "current_conversation": ai_result["conversation"]
+        })
+
+        analysis_text = ai_result["analysis"]
+        problem_start = analysis_text.find("[[[")
+        problem_end = analysis_text.find("]]]")
+        
+        if problem_start != -1 and problem_end != -1:
+            # Extract problem (content between [[[ and ]]])
+            problem = analysis_text[problem_start + 3:problem_end].strip()
+            # Extract solution (everything after ]]])
+            solution = analysis_text[problem_end + 3:].strip()
+        else:
+            problem = ""
+            solution = analysis_text.strip().replace('---', '')  # If no markers found, use entire text as solution
+
+        # Send final completion message with problem and solution
+        await manager.send_message(task_id, {
+            "status": "completed",
+            "message": "Successfully extracted problem and solution",
+            "data": {
+                "question": problem,
+                "solution": solution
+            }
+        })
+
+        # Update user credits
+        await update_user_credits(user_id, -1)
+
+        return {
+            "success": True,
+            "analysis": ai_result["analysis"],
+            "ocr_text": ocr_result["texts"][0] if ocr_result["texts"] else None
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
