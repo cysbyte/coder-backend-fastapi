@@ -42,6 +42,10 @@ async def generate_with_openai(texts: list[str], user_input: str, language: str,
             async with session.post(f"{ai_service_url}/gpt-chat", json=payload) as response:
                 if response.status == 200:
                     result = await response.json()
+                    conversation.append({
+                        "role": "assistant",
+                        "content": result.get("response", "")
+                    })
                     return {
                         "success": True,
                         "analysis": result.get("response", ""),
@@ -191,6 +195,10 @@ async def generate_with_openai_multimodal(ocr_text: str, text: str, images: List
             async with session.post(f"{ai_service_url}/gpt-chat", json=payload) as response:
                 if response.status == 200:
                     result = await response.json()
+                    conversation.append({
+                        "role": "assistant",
+                        "content": result.get("response", "")
+                    })
                     return {
                         "success": True,
                         "analysis": result.get("response", ""),

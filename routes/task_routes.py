@@ -32,7 +32,8 @@ async def multimodal_generate(
     authorization: Optional[str] = Header(None, description="Bearer token for authentication"),
     response: Response = None,
     user_id: str = Form(..., description="User ID of the uploader"),
-    model: str = Form(..., description="Model to use for the task")
+    model: str = Form(..., description="Model to use for the task"),
+    speech: str = Form(..., description="Speech of the user input")
 ):
     try:
         # Validate files parameter
@@ -104,7 +105,8 @@ async def multimodal_generate(
             user_id=user_id,
             user_input=user_input,
             language=language,
-            model=model
+            model=model,
+            speech=speech
         ))
         
         # Return task information
@@ -138,7 +140,8 @@ async def multimodal_debug(
     response: Response = None,
     model: str = Form(..., description="Model to use for the task"),
     language: str = Form(..., description="Language of the user input"),
-    round: int = Form(..., description="Round number")
+    round: int = Form(..., description="Round number"),
+    speech: str = Form(..., description="Speech of the user input")
 ):
     try:
         # Validate number of files
@@ -201,7 +204,8 @@ async def multimodal_debug(
             user_input=user_input,
             language=language,
             model=model,
-            round=round
+            round=round,
+            speech=speech
         ))
         
         # Return task information

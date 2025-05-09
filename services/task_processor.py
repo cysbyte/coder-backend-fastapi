@@ -125,10 +125,6 @@ async def process_generate(
 
         # Configure and store conversation
         conversation = ai_result["conversation"]
-        conversation.append({
-            "role": "assistant",
-            "content": ai_result["analysis"]
-        })
         # Update record with conversation
         await update_record_status(record["id"], {
             "ai_analysis": ai_result["analysis"],
@@ -498,7 +494,8 @@ async def process_generate_multimodal(
         await update_record_status(record["id"], {
             "ai_analysis": ai_result["analysis"],
             "ai_service": "gpt-o4-mini",
-            "conversation": ai_result["conversation"]
+            "conversation": ai_result["conversation"],
+            "current_conversation": ai_result["conversation"]
         })
 
         # Extract problem and solution from AI analysis
@@ -552,7 +549,8 @@ async def process_multimodal_debug(
     images: Optional[list[dict]] = None,  # Make images optional
     language: str = "Python",
     model: str = "gpt-o3-mini",
-    round: int = 0
+    round: int = 0,
+    speech: str = None
 ):
     """
     Process a single image with OCR and combine with message for AI analysis
@@ -648,9 +646,9 @@ async def process_multimodal_debug(
         })
 
         if 'gpt' in model:
-            ai_result = await debug_with_openai_multimodal(ocr_result["texts"], user_input, language, model, task_id)
+            ai_result = await debug_with_openai_multimodal(ocr_result["texts"], user_input, language, model, task_id, speech)
         elif 'claude' in model:
-            ai_result = await debug_with_anthropic(ocr_result["texts"], user_input, language, model, task_id)
+            ai_result = await debug_with_anthropic(ocr_result["texts"], user_input, language, model, task_id, speech)
         
         if not ai_result["success"]:
             
