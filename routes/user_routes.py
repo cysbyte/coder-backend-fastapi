@@ -261,6 +261,9 @@ async def delete_user(
         # First delete all associated roles
         roles_result = supabase.table('roles').delete().eq('user_id', user_id).execute()
         tasks_result = supabase.table('tasks').delete().eq('user_id', user_id).execute()
+        subscriptions_result = supabase.table('subscriptions').delete().eq('user_id', user_id).execute()
+        payments_result = supabase.table('payments').delete().eq('user_id', user_id).execute()
+        credits_transactions_result = supabase.table('credits_transactions').delete().eq('user_id', user_id).execute()
         
         # Then delete the user record
         user_result = supabase.table('users').delete().eq('id', user_id).execute()
@@ -277,7 +280,10 @@ async def delete_user(
             "data": {
                 "user": user_result.data[0],
                 "roles_deleted": len(roles_result.data) if roles_result.data else 0,
-                "tasks_deleted": len(tasks_result.data) if tasks_result.data else 0
+                "tasks_deleted": len(tasks_result.data) if tasks_result.data else 0,
+                "subscriptions_deleted": len(subscriptions_result.data) if subscriptions_result.data else 0,
+                "payments_deleted": len(payments_result.data) if payments_result.data else 0,
+                "credits_transactions_deleted": len(credits_transactions_result.data) if credits_transactions_result.data else 0
             },
             "token_refreshed": token_refreshed
         }
