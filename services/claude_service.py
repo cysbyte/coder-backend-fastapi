@@ -5,7 +5,7 @@ import aiohttp
 import base64
 import json
 from services.database_service import get_record_by_task_id, update_record_status
-
+from services.websocket_service import manager
 async def generate_with_anthropic(texts: list[str], user_input: str, language: str, model: str, task_id: str, speech: str) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
@@ -19,6 +19,11 @@ async def generate_with_anthropic(texts: list[str], user_input: str, language: s
         dict containing success status and analysis results
     """
     try:
+        await manager.send_message(task_id, {
+            "status": "ai started",
+            "step": "ai",
+            "message": "AI analysis started for all user input"
+        })
         # AWS service API endpoint
         ai_service_url = os.getenv('AI_SERVICE_URL')
         if not ai_service_url:
@@ -43,6 +48,11 @@ async def generate_with_anthropic(texts: list[str], user_input: str, language: s
             async with session.post(f"{ai_service_url}/claude-chat", json=payload) as response:
                 if response.status == 200:
                     result = await response.json()
+                    await manager.send_message(task_id, {
+                        "status": "ai completed",
+                        "step": "ai",
+                        "message": "AI analysis completed for all user input"
+                    })
                     return {
                         "success": True,
                         "analysis": result.get("response", ""),
@@ -181,6 +191,11 @@ async def debug_with_anthropic(texts: list[str], user_input: str, language: str,
         dict containing success status and analysis results
     """
     try:
+        await manager.send_message(task_id, {
+            "status": "ai started",
+            "step": "ai",
+            "message": "AI analysis started for all user input"
+        })
         # AWS service API endpoint
         ai_service_url = os.getenv('AI_SERVICE_URL')
         if not ai_service_url:
@@ -225,6 +240,11 @@ async def debug_with_anthropic(texts: list[str], user_input: str, language: str,
             async with session.post(f"{ai_service_url}/claude-chat", json=payload) as response:
                 if response.status == 200:
                     result = await response.json()
+                    await manager.send_message(task_id, {
+                        "status": "ai completed",
+                        "step": "ai",
+                        "message": "AI analysis completed for all user input"
+                    })
                     return {
                         "success": True,
                         "analysis": result.get("response", ""),

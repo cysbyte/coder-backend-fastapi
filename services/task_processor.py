@@ -133,6 +133,12 @@ async def process_generate(
             "current_conversation": conversation,
         })
 
+        await manager.send_message(task_id, {
+            "status": "ai completed",
+            "step": "ai",
+            "message": "AI analysis completed for all user input"
+        })
+
         # Extract problem and solution from AI analysis
         analysis_text = ai_result["analysis"]
         problem_start = analysis_text.find("[[[")
@@ -304,6 +310,12 @@ async def process_debug(
 
         await update_record_status(record["task_id"], {
             "current_conversation": ai_result["conversation"]
+        })
+
+        await manager.send_message(task_id, {
+            "status": "ai completed",
+            "step": "ai",
+            "message": "AI analysis completed for all user input"
         })
 
         analysis_text = ai_result["analysis"]

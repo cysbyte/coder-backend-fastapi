@@ -26,6 +26,7 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
 
 @router.post("/multimodal_generate")
 async def multimodal_generate(
+    task_id: str = Form(..., description="Task ID"),
     files: list[UploadFile] = File(..., description="List of image files to upload"),
     user_input: str = Form(..., description="User Input"),
     language: str = Form(..., description="Language of the user input"),
@@ -230,7 +231,8 @@ async def multimodal_debug(
         )
 
 @router.post("/generate")
-async def upload_image(
+async def generate(
+    task_id: str = Form(..., description="Task ID"),
     files: list[UploadFile] = File(..., description="List of image files to upload"),
     title: str = Form(None, description="Optional title for the batch of images"),
     description: str = Form(None, description="Optional description for the batch of images"),
@@ -274,9 +276,6 @@ async def upload_image(
                 status_code=403,
                 detail="Insufficient credits. Please purchase more credits to continue."
             )
-        
-        # Generate task ID
-        task_id = str(uuid.uuid4())
         
         # Prepare images for processing
         images = []
