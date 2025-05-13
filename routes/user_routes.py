@@ -365,3 +365,59 @@ async def verify_pricing_token(
             status_code=500,
             detail=str(e)
         )
+
+@router.get("/subscription-days/{user_id}")
+async def get_subscription_days(
+    user_id: str,
+    authorization: Optional[str] = Header(None, description="Bearer token for authentication"),
+    response: Response = None
+):
+    """
+    Get remaining days of user's current subscription
+    """
+    try:
+        # Validate the access token
+        user, token_refreshed = await validate_access_token(authorization, response)
+        
+        # Get user's subscription
+        subscription_result = supabase.table('subscriptions').select("*").eq('user_id', user_id).eq('status', 'active').execute()
+        
+        if not subscription_result.data or len(subscription_result.data) == 0:
+            raise HTTPException(
+                status_code=404,
+                detail="No active subscription found"
+            )
+            
+        subscription = subscription_result.data[0]
+        current_period_end = subscription.get('current_period_end')
+        
+        if not current_period_end:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid subscription data: missing period end date"
+            )
+            
+        # Calculate remaining days
+        from datetime import datetime, timezone
+        current_time = datetime.now(timezone.utc)
+        end_date = datetime.fromisoformat(current_period_end.replace('Z', '+00:00'))
+        if end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=timezone.utc)
+        remaining_days = (end_date - current_time).days
+        
+        return {
+            "success": True,
+            "data": {
+                "remaining_days": max(0, remaining_days),
+                "current_period_end": current_period_end
+            },
+            "token_refreshed": token_refreshed
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
