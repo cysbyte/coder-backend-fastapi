@@ -29,9 +29,8 @@ async def process_generate(
             "message": f"Starting processing for {len(images)} images"
         })
 
-        # Upload all images to storage first
-        storage_results = []
-        for index, image in enumerate(images):
+        # Upload all images to storage concurrently
+        async def upload_single_image(image, index):
             await manager.send_message(task_id, {
                 "status": "uploading",
                 "message": f"Uploading image {index + 1} of {len(images)}",
@@ -52,11 +51,22 @@ async def process_generate(
                     "current_image": index + 1,
                     "total_images": len(images)
                 })
-                continue
+                return None
+            return storage_result
 
-            storage_results.append(storage_result)
+        # Upload images concurrently
+        storage_tasks = [upload_single_image(image, idx) for idx, image in enumerate(images)]
+        storage_results = await asyncio.gather(*storage_tasks)
+        storage_results = [r for r in storage_results if r is not None]
 
-        # Create a single record with arrays of URLs and filenames
+        if not storage_results:
+            await manager.send_message(task_id, {
+                "status": "error",
+                "message": "All image uploads failed"
+            })
+            return
+
+        # Create initial record
         initial_record = {
             "id": task_id,
             "image_urls": [result["file_url"] for result in storage_results],
@@ -66,7 +76,12 @@ async def process_generate(
             "total_images": len(images)
         }
 
-        save_result = await save_image_record(initial_record)
+        # Start OCR processing while saving record
+        ocr_task = ocr_parse(images, language)
+        save_task = save_image_record(initial_record)
+        
+        # Wait for both tasks to complete
+        ocr_result, save_result = await asyncio.gather(ocr_task, save_task)
         
         if not save_result["success"]:
             await manager.send_message(task_id, {
@@ -77,16 +92,6 @@ async def process_generate(
 
         record = save_result["data"]
 
-        # OCR Processing for all images
-        await manager.send_message(task_id, {
-            "status": "ocr processing",
-            "step": "ocr",
-            "message": "Performing OCR analysis for all images",
-            "total_images": len(images)
-        })
-        
-        ocr_result = await ocr_parse(images, language)
-        
         if not ocr_result["success"]:
             await manager.send_message(task_id, {
                 "status": "ocr error",
@@ -95,8 +100,8 @@ async def process_generate(
             })
             return
 
-        # Update record with OCR results
-        await update_record_status(record["id"], {
+        # Update record with OCR results asynchronously
+        update_ocr_task = update_record_status(record["id"], {
             "ocr_texts": ocr_result["texts"],
             "ocr_service": "google_vision"
         })
@@ -109,14 +114,17 @@ async def process_generate(
                 "texts": ocr_result["texts"]
             }
         })
-        
+
+        # Start AI processing while OCR update is happening
         if 'gpt' in model:
             ai_result = await generate_with_openai(ocr_result["texts"], user_input, programming_language, model, task_id, speech, language)
         elif 'claude' in model:
-            ai_result = await generate_with_anthropic(ocr_result["texts"], user_input, programming_language, model, task_id, speech, language)
+            ai_result = await generate_with_anthropic(ocr_result["texts"], user_input, programming_language, model, language, task_id, speech)
         
+        # Wait for OCR update to complete
+        await update_ocr_task
+
         if not ai_result["success"]:
-            
             await manager.send_message(task_id, {
                 "status": "ai error",
                 "step": "ai",
@@ -124,14 +132,12 @@ async def process_generate(
             })
             return
 
-        # Configure and store conversation
-        conversation = ai_result["conversation"]
-        # Update record with conversation
-        await update_record_status(record["id"], {
+        # Update record with AI results asynchronously
+        update_ai_task = update_record_status(record["id"], {
             "ai_analysis": ai_result["analysis"],
             "ai_service": model,
-            "conversation": conversation,
-            "current_conversation": conversation,
+            "conversation": ai_result["conversation"],
+            "current_conversation": ai_result["conversation"],
         })
 
         await manager.send_message(task_id, {
@@ -140,22 +146,25 @@ async def process_generate(
             "message": "AI analysis completed for all user input"
         })
 
-        # Extract problem and solution from AI analysis
+        # Extract problem and solution while AI update is happening
         analysis_text = ai_result["analysis"]
         problem_start = analysis_text.find("[[[")
         problem_end = analysis_text.find("]]]")
         
         if problem_start != -1 and problem_end != -1:
-            # Extract problem (content between [[[ and ]]])
             problem = analysis_text[problem_start + 3:problem_end].strip()
-            # Extract solution (everything after ]]])
             solution = analysis_text[problem_end + 3:].strip()
         else:
             problem = ""
-            solution = analysis_text.strip().replace('---', '')  # If no markers found, use entire text as solution
+            solution = analysis_text.strip().replace('---', '')
 
+        # Wait for AI update to complete
+        await update_ai_task
 
-        # Send final completion message with problem and solution
+        # Update credits asynchronously
+        credits_task = update_user_credits(user_id, -1)
+
+        # Send final completion message
         await manager.send_message(task_id, {
             "status": "completed",
             "message": "Successfully extracted problem and solution",
@@ -165,8 +174,8 @@ async def process_generate(
             }
         })
 
-        # Update user credits
-        credits_result = await update_user_credits(user_id, -1)
+        # Wait for credits update
+        credits_result = await credits_task
         if not credits_result["success"]:
             await manager.send_message(task_id, {
                 "status": "credits error",
