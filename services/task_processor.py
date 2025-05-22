@@ -17,9 +17,10 @@ async def process_generate(
     images: list[dict],  # List of dicts containing image_content and filename
     user_id: str,
     user_input: str,
-    language: str,
+    programming_language: str,
     model: str,
-    speech: str
+    speech: str,
+    language: str = 'en'
 ):
     try:
         # Send start message
@@ -84,7 +85,7 @@ async def process_generate(
             "total_images": len(images)
         })
         
-        ocr_result = await ocr_parse(images)
+        ocr_result = await ocr_parse(images, language)
         
         if not ocr_result["success"]:
             await manager.send_message(task_id, {
@@ -110,9 +111,9 @@ async def process_generate(
         })
         
         if 'gpt' in model:
-            ai_result = await generate_with_openai(ocr_result["texts"], user_input, language, model, task_id, speech)
+            ai_result = await generate_with_openai(ocr_result["texts"], user_input, programming_language, model, task_id, speech, language)
         elif 'claude' in model:
-            ai_result = await generate_with_anthropic(ocr_result["texts"], user_input, language, model, task_id, speech)
+            ai_result = await generate_with_anthropic(ocr_result["texts"], user_input, programming_language, model, task_id, speech, language)
         
         if not ai_result["success"]:
             
@@ -189,10 +190,11 @@ async def process_debug(
     user_id: str,
     user_input: str,
     images: Optional[list[dict]] = None,  # Make images optional
-    language: str = "Python",
+    programming_language: str = "Python",
     model: str = "gpt-o3-mini",
     round: int = 0,
-    speech: str = None
+    speech: str = None,
+    language: str = 'en'
 ):
     """
     Process a single image with OCR and combine with message for AI analysis
@@ -264,7 +266,7 @@ async def process_debug(
         
         # Only perform OCR if images are provided
         if images:
-            ocr_result = await ocr_parse(images)
+            ocr_result = await ocr_parse(images, language)
             
             if not ocr_result["success"]:
                 return {
@@ -288,9 +290,9 @@ async def process_debug(
         })
 
         if 'gpt' in model:
-            ai_result = await debug_with_openai(ocr_result["texts"], user_input, language, model, task_id, speech)
+            ai_result = await debug_with_openai(ocr_result["texts"], user_input, programming_language, model, language, task_id, speech)
         elif 'claude' in model:
-            ai_result = await debug_with_anthropic(ocr_result["texts"], user_input, language, model, task_id, speech)
+            ai_result = await debug_with_anthropic(ocr_result["texts"], user_input, programming_language, model, language, task_id, speech)
         
         if not ai_result["success"]:
             
@@ -361,9 +363,10 @@ async def process_generate_multimodal(
     images: list[dict],  # List of dicts containing image_content and filename
     user_id: str,
     user_input: str,
-    language: str,
+    programming_language: str,
     model: str,
-    speech: str
+    speech: str,
+    language: str
 ):
     """
     Process images with OCR and then use multimodal AI analysis
@@ -372,7 +375,10 @@ async def process_generate_multimodal(
         images: List of dicts containing image content and filename
         user_id: User ID of the requester
         user_input: User's input text
-        language: Programming language for code generation
+        programming_language: Programming Language for code generation
+        model: Model to use for AI analysis
+        speech: Speech to use for AI analysis
+        language: Language to use for AI analysis
     """
     try:
         # Send start message
@@ -437,7 +443,7 @@ async def process_generate_multimodal(
             "total_images": len(images)
         })
         
-        ocr_result = await ocr_parse(images)
+        ocr_result = await ocr_parse(images, language)
         
         if not ocr_result["success"]:
             await manager.send_message(task_id, {
@@ -474,16 +480,17 @@ async def process_generate_multimodal(
                 ocr_text=ocr_result["texts"][0],
                 text=user_input,
                 images=base64_images,
-                language=language,
+                programming_language=programming_language,
                 model=model,
                 task_id=task_id,
-                speech=speech
+                speech=speech,
+                language=language
             )
         elif 'claude' in model:
             ai_result = await generate_with_anthropic(
                 texts=ocr_result["texts"],
                 user_input=user_input,
-                language=language,
+                programming_language=programming_language,
                 model=model,
                 task_id=task_id,
                 speech=speech
@@ -559,10 +566,11 @@ async def process_multimodal_debug(
     user_id: str,
     user_input: str,
     images: Optional[list[dict]] = None,  # Make images optional
-    language: str = "Python",
+    programming_language: str = "Python",
     model: str = "gpt-o3-mini",
     round: int = 0,
-    speech: str = None
+    speech: str = None,
+    language: str = 'en'
 ):
     """
     Process a single image with OCR and combine with message for AI analysis
@@ -634,7 +642,7 @@ async def process_multimodal_debug(
         
         # Only perform OCR if images are provided
         if images:
-            ocr_result = await ocr_parse(images)
+            ocr_result = await ocr_parse(images, language)
             
             if not ocr_result["success"]:
                 return {
@@ -658,9 +666,9 @@ async def process_multimodal_debug(
         })
 
         if 'gpt' in model:
-            ai_result = await debug_with_openai_multimodal(ocr_result["texts"], user_input, language, model, task_id, speech)
+            ai_result = await debug_with_openai_multimodal(ocr_result["texts"], user_input, programming_language, model, language, task_id, speech)
         elif 'claude' in model:
-            ai_result = await debug_with_anthropic(ocr_result["texts"], user_input, language, model, task_id, speech)
+            ai_result = await debug_with_anthropic(ocr_result["texts"], user_input, programming_language, model, language, task_id, speech)
         
         if not ai_result["success"]:
             

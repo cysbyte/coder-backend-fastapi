@@ -45,7 +45,7 @@ MOCK_RESPONSES = {
     "error": None
 }
 
-async def ocr_parse(images: list[dict]) -> dict:
+async def ocr_parse(images: list[dict], language: str) -> dict:
     """
     Process multiple images using Google Cloud Vision OCR
     Args:
@@ -61,9 +61,10 @@ async def ocr_parse(images: list[dict]) -> dict:
         for image in images:
         # Create image object
             image_obj = vision.Image(content=image["content"])
+            image_context = vision.ImageContext(language_hints=['en', language] if language != 'en' else [language])
 
             # Perform text detection with layout analysis
-            response = client.document_text_detection(image=image_obj)
+            response = client.document_text_detection(image=image_obj, image_context=image_context)
             document = response.full_text_annotation
 
             if not document:
@@ -134,7 +135,7 @@ async def ocr_parse(images: list[dict]) -> dict:
             "texts": [""] * len(images)  # Return empty texts for all images
         }
 
-async def ocr_parse_space(image_content: bytes, content_type: str = None, filename: str = None) -> dict:
+async def ocr_parse_space(image_content: bytes, content_type: str = None, filename: str = None, language: str = 'en') -> dict:
     """
     Parse image text using OCR.space API
     Args:
@@ -168,7 +169,7 @@ async def ocr_parse_space(image_content: bytes, content_type: str = None, filena
         # Prepare payload
         payload = {
             'apikey': api_key,
-            'language': 'eng',
+            'language': language,
             'isOverlayRequired': False,
             'detectOrientation': True,
             'OCREngine': 2,
@@ -211,7 +212,8 @@ async def ocr_parse_space(image_content: bytes, content_type: str = None, filena
 async def ocr_parse_with_fallback(
     image_content: bytes,
     content_type: str = None,
-    filename: str = None
+    filename: str = None,
+    language: str = 'en'
 ) -> dict:
     """
     Try Google Cloud Vision first, fall back to OCR.space if it fails
@@ -230,7 +232,8 @@ async def ocr_parse_with_fallback(
         ocr_space_result = await ocr_parse_space(
             image_content,
             content_type=content_type,
-            filename=filename
+            filename=filename,
+            language=language
         )
         if ocr_space_result["success"]:
             return {

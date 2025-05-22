@@ -1,13 +1,14 @@
-system_prompt = """
-You are an AI coding assistant helping a user solve an algorithm coding problem in a live interview setting. The user will leverage your output to answer the coding question set by the interviewer. The user will provide the following:
+def get_system_prompt(language):
+    return f"""
+You are an AI coding assistant helping a user solve an algorithm coding problem in a live interview setting. Always respond in {supportedLanguages[language]}. The user will leverage your output to answer the coding question set by the interviewer. The user will provide the following:
 Mode: The action that the user would like you to take - Generate/Debug
-Programming Language: The selected programming language that you should output for all code output
+Programming Language: The selected programming Language that you should output for all code output
 Speech (Optional): The prior conversation between the interviewer and interviewee for context
 OCR Text (Optional): The parsed OCR text through screenshots of the user screen, which often would contain the problem
 User Text Input (Optional): Text input by the user
 
 IMPORTANT FORMATTING GUIDELINES:
-1. Always wrap code blocks with triple backticks and specify the language: ```language
+1. Always wrap code blocks with triple backticks and specify the programming language: ```programming language
 2. For test cases, use ```python for Python or ```javascript for JavaScript
 3. Use markdown headers (##) for section titles
 4. Use bullet points for lists
@@ -148,14 +149,14 @@ def fixed_function():
   - Time/space complexity implications
 """
 
-def get_user_prompt(mode, language, ocr_text, user_input, speech):
+def get_user_prompt(mode, programming_language, ocr_text, user_input, speech):
 
         return f"""
 *Mode*: 
 {mode}
 
 *Programming Language*: 
-{language}
+{programming_language}
 
 *OCR Text*:
 {ocr_text}
@@ -187,9 +188,49 @@ def get_gpt_payload(conversation, model):
             "model": "gpt-4o",
         }
 
-def get_claude_payload(conversation, model):
+def get_claude_payload(conversation, model, language):
     return {
         "messages": conversation,
         "model": model,
-        "system": system_prompt
+        "system": get_system_prompt(language)
     }
+
+supportedLanguages = {
+  'en': 'English',
+  'es': 'Spanish',
+  'fr': 'French',
+  'de': 'German',
+  'zh': 'Chinese Simplified',
+  'zh-TW': 'Chinese Traditional',
+  'ja': 'Japanese',
+  'ko': 'Korean',
+  'hi': 'Hindi',
+  'ru': 'Russian',
+  'pt': 'Portuguese',
+  'it': 'Italian',
+  'nl': 'Dutch',
+  'pl': 'Polish',
+  'tr': 'Turkish',
+  'vi': 'Vietnamese',
+  'sv': 'Swedish',
+  'uk': 'Ukrainian',
+  'el': 'Greek',
+  'cs': 'Czech',
+  'da': 'Danish',
+  'fi': 'Finnish',
+  'hu': 'Hungarian',
+  'no': 'Norwegian',
+  'ro': 'Romanian',
+  'sk': 'Slovak',
+  'th': 'Thai',
+  'ms': 'Malay',
+  'id': 'Indonesian',
+  'bg': 'Bulgarian',
+  'et': 'Estonian',
+  'lv': 'Latvian',
+  'lt': 'Lithuanian',
+  'sl': 'Slovenian',
+  'hr': 'Croatian',
+  'ar': 'Arabic',
+  'he': 'Hebrew'
+}

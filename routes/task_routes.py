@@ -29,12 +29,13 @@ async def multimodal_generate(
     task_id: str = Form(..., description="Task ID"),
     files: list[UploadFile] = File(..., description="List of image files to upload"),
     user_input: str = Form(..., description="User Input"),
-    language: str = Form(..., description="Language of the user input"),
+    programming_language: str = Form(..., description="programming language of the user input"),
     authorization: Optional[str] = Header(None, description="Bearer token for authentication"),
     response: Response = None,
     user_id: str = Form(..., description="User ID of the uploader"),
     model: str = Form(..., description="Model to use for the task"),
-    speech: str = Form(..., description="Speech of the user input")
+    speech: str = Form(..., description="Speech of the user input"),
+    language: str = Form(..., description="Language of the user input")
 ):
     try:
         # Validate files parameter
@@ -105,9 +106,10 @@ async def multimodal_generate(
             images=images,
             user_id=user_id,
             user_input=user_input,
-            language=language,
+            programming_language=programming_language,
             model=model,
-            speech=speech
+            speech=speech,
+            language=language
         ))
         
         # Return task information
@@ -140,9 +142,10 @@ async def multimodal_debug(
     user_input: str = Form(..., description="User Input"),
     response: Response = None,
     model: str = Form(..., description="Model to use for the task"),
-    language: str = Form(..., description="Language of the user input"),
+    programming_language: str = Form(..., description="programming language of the user input"),
     round: int = Form(..., description="Round number"),
-    speech: str = Form(..., description="Speech of the user input")
+    speech: str = Form(..., description="Speech of the user input"),
+    language: str = Form(..., description="Language of the user input")
 ):
     try:
         # Validate number of files
@@ -203,10 +206,11 @@ async def multimodal_debug(
             task_id=task_id,
             images=images,
             user_input=user_input,
-            language=language,
+            programming_language=programming_language,
             model=model,
             round=round,
-            speech=speech
+            speech=speech,
+            language=language
         ))
         
         # Return task information
@@ -240,9 +244,10 @@ async def generate(
     response: Response = None,
     user_id: str = Form(..., description="User ID of the uploader"),
     user_input = Form(..., description="User Input"),
-    language: str = Form(..., description="Language of the user input"),
+    programming_language: str = Form(..., description="programming language of the user input"),
     model: str = Form(..., description="Model to use for the task"),
-    speech: str = Form(..., description="Speech of the user input")
+    speech: str = Form(..., description="Speech of the user input"),
+    language: str = Form(..., description="Language of the user input")
 ):
     try:
         # Validate files parameter
@@ -310,9 +315,10 @@ async def generate(
             images=images,
             user_id=user_id,
             user_input=user_input,
-            language=language,
+            programming_language=programming_language,
             model=model,
-            speech=speech
+            speech=speech,
+            language=language
         ))
         
         # Return task information
@@ -345,9 +351,10 @@ async def debug(
     user_input: str = Form(..., description="User Input"),
     response: Response = None,
     model: str = Form(..., description="Model to use for the task"),
-    language: str = Form(..., description="Language of the user input"),
+    programming_language: str = Form(..., description="programming language of the user input"),
     round: int = Form(..., description="Round number"),
-    speech: str = Form(..., description="Speech of the user input")
+    speech: str = Form(..., description="Speech of the user input"),
+    language: str = Form(..., description="Language of the user input")
 ):
     try:
         # Validate number of files
@@ -408,10 +415,11 @@ async def debug(
             task_id=task_id,
             images=images,
             user_input=user_input,
-            language=language,
+            programming_language=programming_language,
             model=model,
             round=round,
-            speech=speech
+            speech=speech,
+            language=language
         ))
         
         # Return task information

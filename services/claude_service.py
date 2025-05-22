@@ -1,4 +1,4 @@
-from utils.ai import system_prompt, get_user_prompt, get_claude_payload
+from utils.ai import get_system_prompt, get_user_prompt, get_claude_payload
 from typing import List
 import os
 import aiohttp
@@ -6,13 +6,13 @@ import base64
 import json
 from services.database_service import get_record_by_task_id, update_record_status
 from services.websocket_service import manager
-async def generate_with_anthropic(texts: list[str], user_input: str, language: str, model: str, task_id: str, speech: str) -> dict:
+async def generate_with_anthropic(texts: list[str], user_input: str, programming_language: str, model: str, task_id: str, speech: str, language: str) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
     Args:
         texts: List of OCR texts to analyze
         user_input: User's input
-        language: Programming language for code generation (default: python)
+        programming_language: Programming Language for code generation (default: python)
         model: Claude model to use (default: claude-3-5-sonnet-20240620)
         task_id: Task ID to fetch existing conversation
     Returns:
@@ -38,9 +38,9 @@ async def generate_with_anthropic(texts: list[str], user_input: str, language: s
         ])
 
         conversation = [
-            {"role": "user", "content": get_user_prompt('generate', language, combined_text, user_input, speech)}
+            {"role": "user", "content": get_user_prompt('generate', programming_language, combined_text, user_input, speech)}
         ]
-        payload = get_claude_payload(conversation, model)
+        payload = get_claude_payload(conversation, model, language)
 
         # Make POST request to AWS service
         async with aiohttp.ClientSession() as session:
@@ -74,14 +74,16 @@ async def generate_with_anthropic(texts: list[str], user_input: str, language: s
             "success": False,
             "error": str(e)
         }
-        
+
+async def generate_with_anthropic_multimodal(text: str, images: List[str], programming_language: str = "python", model: str = "claude-3-5-sonnet-20240620", language: str = "en") -> dict:
     """
     Process text and images using Claude model with multi-modal capabilities
     Args:
         text: Text input from the user
         images: List of base64 encoded images
-        language: Programming language for code generation (default: python)
+        programming_language: Programming Language for code generation (default: python)
         model: Claude model to use (default: claude-3-5-sonnet-20240620)
+        language: Language to use (default: en)
     Returns:
         dict containing success status and analysis results
     """
@@ -100,7 +102,7 @@ async def generate_with_anthropic(texts: list[str], user_input: str, language: s
         # Add text content first
         content.append({
             "type": "text",
-            "text": get_user_prompt('generate', language, "", text)
+            "text": get_user_prompt('generate', programming_language, "", text)
         })
         
         # Add images to the content if provided
@@ -151,7 +153,7 @@ async def generate_with_anthropic(texts: list[str], user_input: str, language: s
         ]
         
         # Prepare the request payload
-        payload = get_claude_payload(conversation, model)
+        payload = get_claude_payload(conversation, model, language)
         
         # Make POST request to AWS service
         async with aiohttp.ClientSession() as session:
@@ -180,7 +182,7 @@ async def generate_with_anthropic(texts: list[str], user_input: str, language: s
             "error": str(e)
         } 
 
-async def debug_with_anthropic(texts: list[str], user_input: str, language: str, model: str, task_id: str, speech: str) -> dict:
+async def debug_with_anthropic(texts: list[str], user_input: str, programming_language: str, model: str, language: str, task_id: str, speech: str) -> dict:
     """
     Process OCR texts using AWS service API with GPT-4
     Args:
@@ -230,9 +232,9 @@ async def debug_with_anthropic(texts: list[str], user_input: str, language: str,
         conversation = existing_conversation.copy()
         conversation.append({
             "role": "user",
-            "content": get_user_prompt('debug', language, combined_text, user_input, speech)
+            "content": get_user_prompt('debug', programming_language, combined_text, user_input, speech)
         })
-        payload = get_claude_payload(conversation, model)
+        payload = get_claude_payload(conversation, model, language)
 
         # Make POST request to AWS service
         async with aiohttp.ClientSession() as session:
