@@ -11,6 +11,7 @@ from datetime import datetime
 import os
 import aiohttp
 import base64
+import time
 
 async def process_generate(
     task_id: str,
@@ -23,65 +24,23 @@ async def process_generate(
     language: str = 'en'
 ):
     try:
-        # Send start message
-        await manager.send_message(task_id, {
-            "status": "started",
-            "message": f"Starting processing for {len(images)} images"
-        })
-
-        # Upload all images to storage concurrently
-        async def upload_single_image(image, index):
-            await manager.send_message(task_id, {
-                "status": "uploading",
-                "message": f"Uploading image {index + 1} of {len(images)}",
-                "current_image": index + 1,
-                "total_images": len(images)
-            })
-
-            storage_result = await upload_to_storage(
-                file_content=image["content"],
-                file_name=image["filename"],
-                content_type="image/png"    
-            )
-
-            if not storage_result["success"]:
-                await manager.send_message(task_id, {
-                    "status": "storage error",
-                    "message": f"Failed to upload image {image['filename']}: {storage_result.get('error', 'Unknown error')}",
-                    "current_image": index + 1,
-                    "total_images": len(images)
-                })
-                return None
-            return storage_result
-
-        # Upload images concurrently
-        storage_tasks = [upload_single_image(image, idx) for idx, image in enumerate(images)]
-        storage_results = await asyncio.gather(*storage_tasks)
-        storage_results = [r for r in storage_results if r is not None]
-
-        if not storage_results:
-            await manager.send_message(task_id, {
-                "status": "error",
-                "message": "All image uploads failed"
-            })
-            return
-
         # Create initial record
         initial_record = {
             "id": task_id,
-            "image_urls": [result["file_url"] for result in storage_results],
-            "file_names": [image["filename"] for image in images],
             "user_id": user_id,
             "file_type": "image/png",
             "total_images": len(images)
         }
 
         # Start OCR processing while saving record
+        ocr_start_time = time.time()
         ocr_task = ocr_parse(images, language)
         save_task = save_image_record(initial_record)
         
         # Wait for both tasks to complete
         ocr_result, save_result = await asyncio.gather(ocr_task, save_task)
+        ocr_end_time = time.time()
+        ocr_duration = float(f"{ocr_end_time - ocr_start_time:.2f}")
         
         if not save_result["success"]:
             await manager.send_message(task_id, {
@@ -111,15 +70,19 @@ async def process_generate(
             "step": "ocr",
             "message": "OCR analysis completed for all images",
             "data": {
-                "texts": ocr_result["texts"]
+                "texts": ocr_result["texts"],
+                "ocr_duration": ocr_duration
             }
         })
 
         # Start AI processing while OCR update is happening
+        ai_start_time = time.time()
         if 'gpt' in model:
             ai_result = await generate_with_openai(ocr_result["texts"], user_input, programming_language, model, task_id, speech, language)
         elif 'claude' in model:
-            ai_result = await generate_with_anthropic(ocr_result["texts"], user_input, programming_language, model, language, task_id, speech)
+            ai_result = await generate_with_anthropic(ocr_result["texts"], user_input, programming_language, model, task_id, speech, language)
+        ai_end_time = time.time()
+        ai_duration = float(f"{ai_end_time - ai_start_time:.2f}")
         
         # Wait for OCR update to complete
         await update_ocr_task
@@ -143,7 +106,10 @@ async def process_generate(
         await manager.send_message(task_id, {
             "status": "ai completed",
             "step": "ai",
-            "message": "AI analysis completed for all user input"
+            "message": "AI analysis completed for all user input",
+            "data": {
+                "ai_duration": ai_duration
+            }
         })
 
         # Extract problem and solution while AI update is happening
@@ -170,7 +136,9 @@ async def process_generate(
             "message": "Successfully extracted problem and solution",
             "data": {
                 "question": problem,
-                "solution": solution
+                "solution": solution,
+                "ocr_duration": ocr_duration,
+                "ai_duration": ai_duration
             }
         })
 
@@ -185,6 +153,42 @@ async def process_generate(
             await manager.send_message(task_id, {
                 "status": "no credits",
                 "message": "Insufficient credits. Please purchase more credits to continue."
+            })
+
+        # Upload all images to storage after AI processing and credit update
+        async def upload_single_image(image, index):
+            await manager.send_message(task_id, {
+                "message": f"Uploading image {index + 1} of {len(images)}",
+                "current_image": index + 1,
+                "total_images": len(images)
+            })
+
+            storage_result = await upload_to_storage(
+                file_content=image["content"],
+                file_name=image["filename"],
+                content_type="image/png"    
+            )
+
+            if not storage_result["success"]:
+                await manager.send_message(task_id, {
+                    "status": "storage error",
+                    "message": f"Failed to upload image {image['filename']}: {storage_result.get('error', 'Unknown error')}",
+                    "current_image": index + 1,
+                    "total_images": len(images)
+                })
+                return None
+            return storage_result
+
+        # Upload images concurrently
+        storage_tasks = [upload_single_image(image, idx) for idx, image in enumerate(images)]
+        storage_results = await asyncio.gather(*storage_tasks)
+        storage_results = [r for r in storage_results if r is not None]
+
+        if storage_results:
+            # Update record with image URLs and filenames
+            await update_record_status(record["id"], {
+                "image_urls": [result["file_url"] for result in storage_results],
+                "file_names": [image["filename"] for image in images]
             })
 
     except Exception as e:
@@ -214,41 +218,12 @@ async def process_debug(
         images: Optional list of dicts containing image content and filename
     """
     try:
-        storage_results = []
-        for index, image in enumerate(images):
-            await manager.send_message(task_id, {
-                "status": "uploading",
-                "message": f"Uploading image {index + 1} of {len(images)}",
-                "current_image": index + 1,
-                "total_images": len(images)
-            })
-
-            storage_result = await upload_to_storage(
-                file_content=image["content"],
-                file_name=image["filename"],
-                content_type="image/png"    
-            )
-
-            if not storage_result["success"]:
-                await manager.send_message(task_id, {
-                    "status": "storage error",
-                    "message": f"Failed to upload image {image['filename']}: {storage_result.get('error', 'Unknown error')}",
-                    "current_image": index + 1,
-                    "total_images": len(images)
-                })
-                continue
-
-            storage_results.append(storage_result)
-
-        # Create a single record with arrays of URLs and filenames
+        # Create initial record
         initial_record = {
             "id": str(uuid.uuid4()),
             "task_id": task_id,
-            "image_urls": [result["file_url"] for result in storage_results],
-            "file_names": [image["filename"] for image in images],
-            # "user_id": user_id,
             "file_type": "image/png",
-            "total_images": len(images),
+            "total_images": len(images) if images else 0,
             "round": round
         }
 
@@ -268,14 +243,18 @@ async def process_debug(
             "status": "ocr processing",
             "step": "ocr",
             "message": "Performing OCR analysis for all images",
-            "total_images": len(images)
+            "total_images": len(images) if images else 0
         })
         # Initialize OCR result
         ocr_result = {"success": True, "texts": []}
+        ocr_duration = 0
         
         # Only perform OCR if images are provided
         if images:
+            ocr_start_time = time.time()
             ocr_result = await ocr_parse(images, language)
+            ocr_end_time = time.time()
+            ocr_duration = float(f"{ocr_end_time - ocr_start_time:.2f}")
             
             if not ocr_result["success"]:
                 return {
@@ -294,17 +273,21 @@ async def process_debug(
             "step": "ocr",
             "message": "OCR analysis completed for all images",
             "data": {
-                "texts": ocr_result["texts"]
+                "texts": ocr_result["texts"],
+                "ocr_duration": ocr_duration
             }
         })
 
+        # Start AI processing
+        ai_start_time = time.time()
         if 'gpt' in model:
             ai_result = await debug_with_openai(ocr_result["texts"], user_input, programming_language, model, language, task_id, speech)
         elif 'claude' in model:
             ai_result = await debug_with_anthropic(ocr_result["texts"], user_input, programming_language, model, language, task_id, speech)
+        ai_end_time = time.time()
+        ai_duration = float(f"{ai_end_time - ai_start_time:.2f}")
         
         if not ai_result["success"]:
-            
             await manager.send_message(task_id, {
                 "status": "ai error",
                 "step": "ai",
@@ -316,7 +299,8 @@ async def process_debug(
         await update_record_status_for_debug(record["id"], {
             "ai_analysis": ai_result["analysis"],
             "ai_service": model,
-            "conversation": ai_result["conversation"]
+            "conversation": ai_result["conversation"],
+            "ai_duration": ai_duration
         })
 
         await update_record_status(record["task_id"], {
@@ -326,7 +310,10 @@ async def process_debug(
         await manager.send_message(task_id, {
             "status": "ai completed",
             "step": "ai",
-            "message": "AI analysis completed for all user input"
+            "message": "AI analysis completed for all user input",
+            "data": {
+                "ai_duration": ai_duration
+            }
         })
 
         analysis_text = ai_result["analysis"]
@@ -348,12 +335,48 @@ async def process_debug(
             "message": "Successfully extracted problem and solution",
             "data": {
                 "question": problem,
-                "solution": solution
+                "solution": solution,
+                "ocr_duration": ocr_duration,
+                "ai_duration": ai_duration
             }
         })
 
         # Update user credits
         await update_user_credits(user_id, -1)
+
+        # Upload images after AI processing and credit update
+        if images:
+            storage_results = []
+            for index, image in enumerate(images):
+                await manager.send_message(task_id, {
+                    "message": f"Uploading image {index + 1} of {len(images)}",
+                    "current_image": index + 1,
+                    "total_images": len(images)
+                })
+
+                storage_result = await upload_to_storage(
+                    file_content=image["content"],
+                    file_name=image["filename"],
+                    content_type="image/png"    
+                )
+
+                if not storage_result["success"]:
+                    await manager.send_message(task_id, {
+                        "status": "storage error",
+                        "message": f"Failed to upload image {image['filename']}: {storage_result.get('error', 'Unknown error')}",
+                        "current_image": index + 1,
+                        "total_images": len(images)
+                    })
+                    continue
+
+                storage_results.append(storage_result)
+
+            if storage_results:
+                # Update record with image URLs and filenames
+                await update_record_status_for_debug(record["id"], {
+                    "image_urls": [result["file_url"] for result in storage_results],
+                    "file_names": [image["filename"] for image in images]
+                })
 
         return {
             "success": True,
@@ -400,7 +423,6 @@ async def process_generate_multimodal(
         storage_results = []
         for index, image in enumerate(images):
             await manager.send_message(task_id, {
-                "status": "uploading",
                 "message": f"Uploading image {index + 1} of {len(images)}",
                 "current_image": index + 1,
                 "total_images": len(images)
@@ -502,7 +524,8 @@ async def process_generate_multimodal(
                 programming_language=programming_language,
                 model=model,
                 task_id=task_id,
-                speech=speech
+                speech=speech,
+                language=language
             )
         
         if not ai_result["success"]:
@@ -593,7 +616,6 @@ async def process_multimodal_debug(
         storage_results = []
         for index, image in enumerate(images):
             await manager.send_message(task_id, {
-                "status": "uploading",
                 "message": f"Uploading image {index + 1} of {len(images)}",
                 "current_image": index + 1,
                 "total_images": len(images)

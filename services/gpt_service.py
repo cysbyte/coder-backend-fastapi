@@ -17,6 +17,7 @@ async def generate_with_openai(texts: list[str], user_input: str, programming_la
         dict containing success status and analysis results
     """
     try:
+        print(f"[DEBUG] Starting generate_with_openai for task {task_id}")
         await manager.send_message(task_id, {
             "status": "ai started",
             "step": "ai",
@@ -40,31 +41,78 @@ async def generate_with_openai(texts: list[str], user_input: str, programming_la
             {"role": "user", "content": get_user_prompt('generate', programming_language, combined_text, user_input, speech)}
         ]
         payload = get_gpt_payload(conversation, model)
+        payload["stream"] = True  # Enable streaming
 
-        # Make POST request to AWS service
+        print(f"[DEBUG] Sending request to {ai_service_url}/gpt-chat-stream with stream=True")
+        full_response = ""
         async with aiohttp.ClientSession() as session:
-            # Add /chat endpoint to the URL
-            async with session.post(f"{ai_service_url}/gpt-chat", json=payload) as response:
+            async with session.post(f"{ai_service_url}/gpt-chat-stream", json=payload) as response:
+                print(f"[DEBUG] Received response with status {response.status}")
                 if response.status == 200:
-                    result = await response.json()
+                    async for line in response.content:
+                        if line:
+                            try:
+                                line_text = line.decode('utf-8').strip()
+                                print(f"[DEBUG] Received line: {line_text[:100]}...")  # Print first 100 chars
+                                if line_text.startswith('data: '):
+                                    line_text = line_text[6:]
+                                if line_text == '[DONE]':
+                                    print("[DEBUG] Received [DONE] signal")
+                                    break
+                                    
+                                chunk = json.loads(line_text)
+                                # Handle the actual format from webservice
+                                if 'content' in chunk:
+                                    content = chunk['content']
+                                    if content:
+                                        # Accumulate content until we have a meaningful chunk
+                                        # or hit a natural break point
+                                        full_response += content
+                                        
+                                        # Send message if we hit a natural break point
+                                        # (end of sentence, line break, or accumulated enough content)
+                                        if (content.endswith(('.', '!', '?', '\n', '```')) or 
+                                            len(full_response) - len(content) > 50):  # Send every ~50 chars
+                                            print(f"[DEBUG] Sending buffered message: {content[:50]}...")
+                                            await manager.send_message(task_id, {
+                                                "status": "ai streaming",
+                                                "step": "ai",
+                                                "message": 'ai streaming',
+                                                "content": content,
+                                                "is_streaming": True
+                                            })
+                            except json.JSONDecodeError as e:
+                                print(f"[DEBUG] JSON decode error: {str(e)}")
+                                continue
+                            except Exception as e:
+                                print(f"[DEBUG] Error processing stream chunk: {str(e)}")
+                                continue
+
+                    print("[DEBUG] Stream completed, sending final message")
                     await manager.send_message(task_id, {
                         "status": "ai completed",
                         "step": "ai",
-                        "message": "AI analysis completed for all user input"
+                        "message": "AI analysis completed",
+                        "is_streaming": False,
+                        "data": {
+                            "solution": full_response
+                        }
                     })
+
                     conversation.append({
                         "role": "assistant",
-                        "content": result.get("response", "")
+                        "content": full_response
                     })
+
                     return {
                         "success": True,
-                        "analysis": result.get("response", ""),
+                        "analysis": full_response,
                         "service": model,
                         "conversation": conversation
                     }
                 else:
                     error_text = await response.text()
-                    print(f"AI Service Error Response: {error_text}")  # Add logging
+                    print(f"[DEBUG] Error response: {error_text}")
                     return {
                         "success": False,
                         "error": f"AI service error: {error_text}",
@@ -72,7 +120,7 @@ async def generate_with_openai(texts: list[str], user_input: str, programming_la
                     }
 
     except Exception as e:
-        print(f"OpenAI Processing Error: {str(e)}")
+        print(f"[DEBUG] OpenAI Processing Error: {str(e)}")
         return {
             "success": False,
             "error": str(e)
@@ -90,6 +138,7 @@ async def debug_with_openai(texts: list[str], user_input: str, programming_langu
         dict containing success status and analysis results
     """
     try:
+        print(f"[DEBUG] Starting debug_with_openai for task {task_id}")
         await manager.send_message(task_id, {
             "status": "ai started",
             "step": "ai",
@@ -116,7 +165,6 @@ async def debug_with_openai(texts: list[str], user_input: str, programming_langu
         existing_conversation = record.get("current_conversation", [])
         if isinstance(existing_conversation, str):
             try:
-                import json
                 existing_conversation = json.loads(existing_conversation)
             except:
                 existing_conversation = []
@@ -132,27 +180,78 @@ async def debug_with_openai(texts: list[str], user_input: str, programming_langu
             "content": get_user_prompt('debug', programming_language, combined_text, user_input, speech)
         })
         payload = get_gpt_payload(conversation, model)
+        payload["stream"] = True  # Enable streaming
 
-        # Make POST request to AWS service
+        print(f"[DEBUG] Sending request to {ai_service_url}/gpt-chat-stream with stream=True")
+        full_response = ""
         async with aiohttp.ClientSession() as session:
-            # Add /chat endpoint to the URL
-            async with session.post(f"{ai_service_url}/gpt-chat", json=payload) as response:
+            async with session.post(f"{ai_service_url}/gpt-chat-stream", json=payload) as response:
+                print(f"[DEBUG] Received response with status {response.status}")
                 if response.status == 200:
+                    async for line in response.content:
+                        if line:
+                            try:
+                                line_text = line.decode('utf-8').strip()
+                                print(f"[DEBUG] Received line: {line_text[:100]}...")  # Print first 100 chars
+                                if line_text.startswith('data: '):
+                                    line_text = line_text[6:]
+                                if line_text == '[DONE]':
+                                    print("[DEBUG] Received [DONE] signal")
+                                    break
+                                    
+                                chunk = json.loads(line_text)
+                                # Handle the actual format from webservice
+                                if 'content' in chunk:
+                                    content = chunk['content']
+                                    if content:
+                                        # Accumulate content until we have a meaningful chunk
+                                        # or hit a natural break point
+                                        full_response += content
+                                        
+                                        # Send message if we hit a natural break point
+                                        # (end of sentence, line break, or accumulated enough content)
+                                        if (content.endswith(('.', '!', '?', '\n', '```')) or 
+                                            len(full_response) - len(content) > 50):  # Send every ~50 chars
+                                            print(f"[DEBUG] Sending buffered message: {content[:50]}...")
+                                            await manager.send_message(task_id, {
+                                                "status": "ai streaming",
+                                                "step": "ai",
+                                                "message": 'ai streaming',
+                                                "content": content,
+                                                "is_streaming": True
+                                            })
+                            except json.JSONDecodeError as e:
+                                print(f"[DEBUG] JSON decode error: {str(e)}")
+                                continue
+                            except Exception as e:
+                                print(f"[DEBUG] Error processing stream chunk: {str(e)}")
+                                continue
+
+                    print("[DEBUG] Stream completed, sending final message")
                     await manager.send_message(task_id, {
                         "status": "ai completed",
                         "step": "ai",
-                        "message": "AI analysis completed for all user input"
+                        "message": "AI analysis completed",
+                        "is_streaming": False,
+                        "data": {
+                            "solution": full_response
+                        }
                     })
-                    result = await response.json()
+
+                    conversation.append({
+                        "role": "assistant",
+                        "content": full_response
+                    })
+
                     return {
                         "success": True,
-                        "analysis": result.get("response", ""),
+                        "analysis": full_response,
                         "service": model,
                         "conversation": conversation
                     }
                 else:
                     error_text = await response.text()
-                    print(f"AI Service Error Response: {error_text}")  # Add logging
+                    print(f"[DEBUG] Error response: {error_text}")
                     return {
                         "success": False,
                         "error": f"AI service error: {error_text}",
@@ -161,7 +260,7 @@ async def debug_with_openai(texts: list[str], user_input: str, programming_langu
                     
 
     except Exception as e:
-        print(f"OpenAI Processing Error: {str(e)}")
+        print(f"[DEBUG] OpenAI Processing Error: {str(e)}")
         return {
             "success": False,
             "error": str(e)

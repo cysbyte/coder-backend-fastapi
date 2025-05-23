@@ -8,7 +8,7 @@ from services.database_service import get_record_by_task_id, update_record_statu
 from services.websocket_service import manager
 async def generate_with_anthropic(texts: list[str], user_input: str, programming_language: str, model: str, task_id: str, speech: str, language: str) -> dict:
     """
-    Process OCR texts using AWS service API with GPT-4
+    Process OCR texts using AWS service API with Claude streaming
     Args:
         texts: List of OCR texts to analyze
         user_input: User's input
@@ -42,26 +42,63 @@ async def generate_with_anthropic(texts: list[str], user_input: str, programming
         ]
         payload = get_claude_payload(conversation, model, language)
 
-        # Make POST request to AWS service
+        # Make POST request to AWS service with streaming
         async with aiohttp.ClientSession() as session:
-            # Add /chat endpoint to the URL
-            async with session.post(f"{ai_service_url}/claude-chat", json=payload) as response:
+            async with session.post(f"{ai_service_url}/claude-chat-stream", json=payload) as response:
                 if response.status == 200:
-                    result = await response.json()
+                    full_response = ""
+                    buffer = ""
+                    async for line in response.content:
+                        if line:
+                            try:
+                                # Remove 'data: ' prefix and parse JSON
+                                data = json.loads(line.decode('utf-8').replace('data: ', ''))
+                                content = data.get('content', '')
+                                buffer += content
+                                full_response += content
+                                
+                                # Send update when buffer reaches certain size or contains newline
+                                if len(buffer) >= 50 or '\n' in buffer:
+                                    await manager.send_message(task_id, {
+                                        "status": "ai streaming",
+                                        "step": "ai",
+                                        "message": 'ai streaming',
+                                        "content": buffer,
+                                        "is_streaming": True
+                                    })
+                                    buffer = ""
+                            except json.JSONDecodeError:
+                                continue
+                    
+                    # Send any remaining content in buffer
+                    if buffer:
+                        await manager.send_message(task_id, {
+                            "status": "ai streaming",
+                            "step": "ai",
+                            "message": 'ai streaming',
+                            "content": buffer,
+                            "is_streaming": True
+                        })
+                    
                     await manager.send_message(task_id, {
                         "status": "ai completed",
                         "step": "ai",
-                        "message": "AI analysis completed for all user input"
+                        "message": "AI analysis completed for all user input",
+                        "is_streaming": False,
+                        "data": {
+                            "solution": full_response
+                        }
                     })
+                    
                     return {
                         "success": True,
-                        "analysis": result.get("response", ""),
+                        "analysis": full_response,
                         "service": model,
                         "conversation": conversation
                     }
                 else:
                     error_text = await response.text()
-                    print(f"AI Service Error Response: {error_text}")  # Add logging
+                    print(f"AI Service Error Response: {error_text}")
                     return {
                         "success": False,
                         "error": f"AI service error: {error_text}",
@@ -184,7 +221,7 @@ async def generate_with_anthropic_multimodal(text: str, images: List[str], progr
 
 async def debug_with_anthropic(texts: list[str], user_input: str, programming_language: str, model: str, language: str, task_id: str, speech: str) -> dict:
     """
-    Process OCR texts using AWS service API with GPT-4
+    Process OCR texts using AWS service API with Claude streaming
     Args:
         texts: List of OCR texts to analyze
         message: User's debug message
@@ -236,26 +273,63 @@ async def debug_with_anthropic(texts: list[str], user_input: str, programming_la
         })
         payload = get_claude_payload(conversation, model, language)
 
-        # Make POST request to AWS service
+        # Make POST request to AWS service with streaming
         async with aiohttp.ClientSession() as session:
-            # Add /chat endpoint to the URL
-            async with session.post(f"{ai_service_url}/claude-chat", json=payload) as response:
+            async with session.post(f"{ai_service_url}/claude-chat-stream", json=payload) as response:
                 if response.status == 200:
-                    result = await response.json()
+                    full_response = ""
+                    buffer = ""
+                    async for line in response.content:
+                        if line:
+                            try:
+                                # Remove 'data: ' prefix and parse JSON
+                                data = json.loads(line.decode('utf-8').replace('data: ', ''))
+                                content = data.get('content', '')
+                                buffer += content
+                                full_response += content
+                                
+                                # Send update when buffer reaches certain size or contains newline
+                                if len(buffer) >= 50 or '\n' in buffer:
+                                    await manager.send_message(task_id, {
+                                        "status": "ai streaming",
+                                        "step": "ai",
+                                        "message": 'ai streaming',
+                                        "content": buffer,
+                                        "is_streaming": True
+                                    })
+                                    buffer = ""
+                            except json.JSONDecodeError:
+                                continue
+                    
+                    # Send any remaining content in buffer
+                    if buffer:
+                        await manager.send_message(task_id, {
+                            "status": "ai streaming",
+                            "step": "ai",
+                            "message": 'ai streaming',
+                            "content": buffer,
+                            "is_streaming": True
+                        })
+                    
                     await manager.send_message(task_id, {
                         "status": "ai completed",
                         "step": "ai",
-                        "message": "AI analysis completed for all user input"
+                        "message": "AI analysis completed for all user input",
+                        "is_streaming": False,
+                        "data": {
+                            "solution": full_response
+                        }
                     })
+                    
                     return {
                         "success": True,
-                        "analysis": result.get("response", ""),
+                        "analysis": full_response,
                         "service": model,
                         "conversation": conversation
                     }
                 else:
                     error_text = await response.text()
-                    print(f"AI Service Error Response: {error_text}")  # Add logging
+                    print(f"AI Service Error Response: {error_text}")
                     return {
                         "success": False,
                         "error": f"AI service error: {error_text}",

@@ -367,20 +367,20 @@ async def debug(
         # First validate the access token
         user, token_refreshed = await validate_access_token(authorization, response)
 
-        # Check user's remaining credits
-        credits_result = await get_user_credits(user_id)
-        if not credits_result["success"]:
-            raise HTTPException(
-                status_code=404,
-                detail=credits_result.get("error", "Failed to get user credits")
-            )
+        # # Check user's remaining credits
+        # credits_result = await get_user_credits(user_id)
+        # if not credits_result["success"]:
+        #     raise HTTPException(
+        #         status_code=404,
+        #         detail=credits_result.get("error", "Failed to get user credits")
+        #     )
         
-        remaining_credits = credits_result["data"]["remaining_credits"]
-        if remaining_credits <= 0:
-            raise HTTPException(
-                status_code=403,
-                detail="Insufficient credits. Please purchase more credits to continue."
-            )
+        # remaining_credits = credits_result["data"]["remaining_credits"]
+        # if remaining_credits <= 0:
+        #     raise HTTPException(
+        #         status_code=403,
+        #         detail="Insufficient credits. Please purchase more credits to continue."
+        #     )
         # Prepare images for processing
         images = []
         if files:
