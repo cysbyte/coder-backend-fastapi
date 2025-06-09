@@ -77,7 +77,7 @@ async def get_roles_by_user(
             .select('*')\
             .eq('user_id', user_id)\
             .order('created_at', desc=True)\
-            .limit(3)\
+            .limit(10)\
             .execute()
         
         if not result.data:

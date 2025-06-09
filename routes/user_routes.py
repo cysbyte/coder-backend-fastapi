@@ -8,7 +8,7 @@ from services.websocket_service import manager
 import jwt
 import os
 from dotenv import load_dotenv
-
+from datetime import datetime, timezone
 # Load environment variables
 load_dotenv()
 
@@ -299,6 +299,7 @@ async def delete_user(
 @router.post("/verify-pricing-token")
 async def verify_pricing_token(
     request: PricingTokenRequest,
+
     response: Response = None
 ):
     """
@@ -383,10 +384,14 @@ async def get_subscription_days(
         subscription_result = supabase.table('subscriptions').select("*").eq('user_id', user_id).eq('status', 'active').execute()
         
         if not subscription_result.data or len(subscription_result.data) == 0:
-            raise HTTPException(
-                status_code=404,
-                detail="No active subscription found"
-            )
+            return {
+                "success": True,
+                "data": {
+                    "remaining_days": 0,
+                    "current_period_end": datetime.now(timezone.utc).isoformat()
+                },
+                "token_refreshed": token_refreshed
+            }
             
         subscription = subscription_result.data[0]
         current_period_end = subscription.get('current_period_end')
@@ -398,7 +403,6 @@ async def get_subscription_days(
             )
             
         # Calculate remaining days
-        from datetime import datetime, timezone
         current_time = datetime.now(timezone.utc)
         end_date = datetime.fromisoformat(current_period_end.replace('Z', '+00:00'))
         if end_date.tzinfo is None:
