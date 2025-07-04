@@ -34,6 +34,7 @@ class UpdateUserNameRequest(BaseModel):
 class CreateUserRequest(BaseModel):
     user_id: str
     email: str
+    os: Optional[str] = None
 
 @router.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
@@ -65,7 +66,7 @@ async def create_user(
     """
     try:
         # Validate the access token
-        user, token_refreshed = await validate_access_token(authorization, response)
+        # user, token_refreshed = await validate_access_token(authorization, response)
         
         # Check if user already exists
         existing_user = supabase.table('users').select("*").eq('id', request.user_id).execute()
@@ -74,14 +75,17 @@ async def create_user(
             return {
                 "success": True,
                 "data": existing_user.data[0],
-                "token_refreshed": token_refreshed
+                "token_refreshed": None
             }
         
         # Insert new user record
         result = supabase.table('users').insert({
             'id': request.user_id,
             'email': request.email,
+            'os': request.os,
         }).execute()
+
+        print('request.os', request.os)
         
         if not result.data:
             raise HTTPException(
@@ -92,7 +96,7 @@ async def create_user(
         return {
             "success": True,
             "data": result.data[0],
-            "token_refreshed": token_refreshed
+            "token_refreshed": None
         }
         
     except HTTPException as he:
@@ -180,7 +184,7 @@ async def get_credits(
     """
     try:
         # Validate the access token
-        user, token_refreshed = await validate_access_token(authorization, response)
+        # user, token_refreshed = await validate_access_token(authorization, response)
         
         # Get user credits
         credits_result = await get_user_credits(user_id)
@@ -194,7 +198,7 @@ async def get_credits(
         return {
             "success": True,
             "data": credits_result["data"],
-            "token_refreshed": token_refreshed
+            "token_refreshed": None
         }
         
     except HTTPException as he:
