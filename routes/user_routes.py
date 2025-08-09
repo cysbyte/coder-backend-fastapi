@@ -66,7 +66,7 @@ async def create_user(
     """
     try:
         # Validate the access token
-        # user, token_refreshed = await validate_access_token(authorization, response)
+        user, token_refreshed = await validate_access_token(authorization, response)
         
         # Check if user already exists
         existing_user = supabase.table('users').select("*").eq('id', request.user_id).execute()
@@ -75,7 +75,7 @@ async def create_user(
             return {
                 "success": True,
                 "data": existing_user.data[0],
-                "token_refreshed": None
+                "token_refreshed": token_refreshed
             }
         
         # Insert new user record
@@ -96,7 +96,7 @@ async def create_user(
         return {
             "success": True,
             "data": result.data[0],
-            "token_refreshed": None
+            "token_refreshed": token_refreshed
         }
         
     except HTTPException as he:

@@ -1,16 +1,26 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import auth_routes, user_routes, task_routes, role_routes
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import os
 import time
 import logging
+import builtins
 
 # Load environment variables
 load_dotenv()
 
-# Configure logging
+# Disable prints in production or when explicitly requested
+_env = os.environ.get("ENV") or os.environ.get("PYTHON_ENV") or os.environ.get("APP_ENV")
+_disable_prints_flag = str(os.environ.get("DISABLE_PRINTS", "")).lower() in ("1", "true", "yes")
+_is_production = (_env or "").lower() in ("production", "prod")
+if _disable_prints_flag or _is_production:
+    builtins.print = lambda *args, **kwargs: None
+
+# Configure logging (default to INFO in production, DEBUG otherwise unless LOG_LEVEL is set)
+_default_level = "INFO" if (_disable_prints_flag or _is_production) else "DEBUG"
+_log_level = os.environ.get("LOG_LEVEL", _default_level).upper()
+logging.basicConfig(level=getattr(logging, _log_level, logging.INFO))
 logger = logging.getLogger(__name__)
 
 # Initialize Supabase client
@@ -31,6 +41,7 @@ app.add_middleware(
 )
 
 # Include routers
+from routes import auth_routes, user_routes, task_routes, role_routes
 app.include_router(auth_routes.router)
 app.include_router(user_routes.router)
 app.include_router(task_routes.router)

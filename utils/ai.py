@@ -187,6 +187,18 @@ def get_gpt_payload(conversation, model):
             "messages": conversation,
             "model": "gpt-4o",
         }
+    elif(model == "gpt-5-mini-high"):
+        return {
+            "messages": conversation,
+            "model": "gpt-5-mini",
+            "high": True
+        }
+    elif(model == "gpt-5"):
+        return {
+            "messages": conversation,
+            "model": "gpt-5",
+            "high": True
+        }
 
 def get_claude_payload(conversation, model, language):
     return {
