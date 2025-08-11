@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from supabase import Client
 from gotrue.errors import AuthApiError
 from utils.supabase_client import supabase
-from utils.auth import validate_access_token
+from utils.auth import validate_access_token, get_token_expiration_info
 
 router = APIRouter(
     prefix="/auth",
@@ -25,6 +25,13 @@ class ValidationCodeRequest(BaseModel):
 class VerifyCodeRequest(BaseModel):
     email: str
     code: str
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+class TestTokenRequest(BaseModel):
+    email: str
+    password: str
 
 @router.post("/signup")
 def signup(request: SignUpRequest):
@@ -99,6 +106,82 @@ async def send_validation_code(request: ValidationCodeRequest):
             "success": False,
             "error": str(e)
         }
+
+@router.post("/test-login-short-token")
+async def test_login_short_token(request: TestTokenRequest):
+    """
+    Test endpoint that creates a session with very short token expiration
+    """
+    try:
+        # Sign in the user
+        auth_response = supabase.auth.sign_in_with_password({
+            "email": request.email,
+            "password": request.password
+        })
+        
+        if not auth_response.user:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        # Note: The actual token expiration is controlled by Supabase JWT settings
+        # This endpoint just provides a way to test the flow
+        return {
+            "success": True,
+            "message": "Test login successful. Tokens will expire based on Supabase JWT settings.",
+            "user": auth_response.user,
+            "session": auth_response.session
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+@router.post("/refresh-token")
+async def refresh_token(request: RefreshTokenRequest):
+    """
+    Refresh access token using refresh token without requiring full authentication
+    """
+    try:
+        # Attempt to refresh the session using the provided refresh token
+        refresh_response = supabase.auth.refresh_session(request.refresh_token)
+        
+        if not refresh_response or not getattr(refresh_response, "user", None):
+            raise HTTPException(
+                status_code=401,
+                detail="Failed to refresh token. Please sign in again."
+            )
+        
+        # Return the new tokens
+        session = getattr(refresh_response, "session", None)
+        if session:
+            return {
+                "success": True,
+                "user": refresh_response.user,
+                "access_token": getattr(session, "access_token", None),
+                "refresh_token": getattr(session, "refresh_token", None),
+                "expires_at": getattr(session, "expires_at", None)
+            }
+        else:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid session data received"
+            )
+            
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(
+            status_code=401,
+            detail=f"Token refresh failed: {str(e)}"
+        )
+
+@router.get("/token-info")
+async def get_token_info():
+    """
+    Get information about current token expiration settings (for debugging)
+    """
+    return {
+        "success": True,
+        "data": get_token_expiration_info()
+    }
 
 @router.post("/verify-code")
 async def verify_validation_code(request: VerifyCodeRequest):

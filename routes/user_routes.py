@@ -184,7 +184,7 @@ async def get_credits(
     """
     try:
         # Validate the access token
-        # user, token_refreshed = await validate_access_token(authorization, response)
+        user, token_refreshed = await validate_access_token(authorization, response)
         
         # Get user credits
         credits_result = await get_user_credits(user_id)
@@ -198,7 +198,7 @@ async def get_credits(
         return {
             "success": True,
             "data": credits_result["data"],
-            "token_refreshed": None
+            "token_refreshed": token_refreshed
         }
         
     except HTTPException as he:
