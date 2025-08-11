@@ -183,6 +183,18 @@ async def get_token_info():
         "data": get_token_expiration_info()
     }
 
+@router.get("/test-headers")
+async def test_headers(response: Response):
+    """
+    Test endpoint to verify custom headers are working
+    """
+    response.headers["New-Access-Token"] = "test-access-token-123"
+    response.headers["New-Refresh-Token"] = "test-refresh-token-456"
+    return {
+        "success": True,
+        "message": "Test headers set. Check response headers for New-Access-Token and New-Refresh-Token"
+    }
+
 @router.post("/verify-code")
 async def verify_validation_code(request: VerifyCodeRequest):
     """
