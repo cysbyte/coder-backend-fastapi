@@ -42,11 +42,12 @@ app.add_middleware(
 )
 
 # Include routers
-from routes import auth_routes, user_routes, task_routes, role_routes
+from routes import auth_routes, user_routes, task_routes, role_routes, coder_routes
 app.include_router(auth_routes.router)
 app.include_router(user_routes.router)
 app.include_router(task_routes.router)
 app.include_router(role_routes.router)
+app.include_router(coder_routes.router)
 
 @app.get("/")
 def read_root():
