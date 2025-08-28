@@ -392,22 +392,22 @@ async def debug(
                         detail=f"Invalid file type for {file.filename}. Only images are allowed."
                     )
 
-            # Read file content
-            content = await file.read()
-            
-            # Validate file size (e.g., 10MB limit)
-            max_size = 10 * 1024 * 1024  # 10MB in bytes
-            if len(content) > max_size:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"File size exceeds maximum limit of 10MB for {file.filename}"
-                )
-            
-            # Add image to list
-            images.append({
-                "content": content,
-                "filename": file.filename
-            })
+                # Read file content
+                content = await file.read()
+                
+                # Validate file size (e.g., 10MB limit)
+                max_size = 10 * 1024 * 1024  # 10MB in bytes
+                if len(content) > max_size:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"File size exceeds maximum limit of 10MB for {file.filename}"
+                    )
+                
+                # Add image to list
+                images.append({
+                    "content": content,
+                    "filename": file.filename
+                })
         
         # Create async task with all images
         asyncio.create_task(process_debug(
