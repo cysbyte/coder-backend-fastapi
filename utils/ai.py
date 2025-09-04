@@ -187,16 +187,32 @@ def get_gpt_payload(conversation, model):
             "messages": conversation,
             "model": "gpt-4o",
         }
-    elif(model == "gpt-5-mini-high"):
+    elif(model == "gpt-5-mini"):
         return {
             "messages": conversation,
-            "model": "gpt-5-mini",
+            "model": "o3-mini",
             "high": True
         }
     elif(model == "gpt-5"):
         return {
             "messages": conversation,
             "model": "gpt-5",
+            "high": True
+        }
+    elif(model == "gpt-5o"):
+        return {
+            "messages": conversation,
+            "model": "gpt-5o",
+        }
+    elif(model == "gpt-5o-mini"):
+        return {
+            "messages": conversation,
+            "model": "gpt-5o-mini",
+        }
+    elif(model == "gpt-5o-mini-high"):
+        return {
+            "messages": conversation,
+            "model": "gpt-5o-mini",
             "high": True
         }
 

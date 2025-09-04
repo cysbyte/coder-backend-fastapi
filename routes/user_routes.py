@@ -72,6 +72,21 @@ async def create_user(
         existing_user = supabase.table('users').select("*").eq('id', request.user_id).execute()
         
         if existing_user.data and len(existing_user.data) > 0:
+            # User exists, check if we need to update OS field
+            if request.os is not None:
+                # Update OS field if provided
+                update_result = supabase.table('users').update({
+                    'os': request.os
+                }).eq('id', request.user_id).execute()
+                
+                if update_result.data:
+                    return {
+                        "success": True,
+                        "data": update_result.data[0],
+                        "token_refreshed": token_refreshed
+                    }
+            
+            # Return existing user data if no update needed
             return {
                 "success": True,
                 "data": existing_user.data[0],

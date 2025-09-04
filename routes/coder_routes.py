@@ -16,7 +16,7 @@ async def get_coder_data(
 ):
     try:
         # Validate access token
-        user, token_refreshed = await validate_access_token(authorization, response)
+        # user, token_refreshed = await validate_access_token(authorization, response)
 
         # Query coder database
         result = await select_with_retry('coders', id=1)
@@ -24,7 +24,7 @@ async def get_coder_data(
         return {
             "success": True,
             "data": result.data,
-            "token_refreshed": token_refreshed
+            "token_refreshed": None
         }
     except HTTPException as he:
         raise he
