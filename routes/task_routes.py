@@ -7,6 +7,7 @@ from services.websocket_service import manager
 from utils.auth import validate_access_token
 from services.database_service import get_user_credits
 import uuid
+from utils.supabase_client import supabase
 
 router = APIRouter(
     prefix="/task",
@@ -53,7 +54,8 @@ async def multimodal_generate(
             )
 
         # First validate the access token
-        user, token_refreshed = await validate_access_token(authorization, response)
+        # user, token_refreshed = await validate_access_token(authorization, response)
+        user = supabase.table('users').select("*").eq('id', user_id).execute().data[0]
         
         # Check user's remaining credits
         credits_result = await get_user_credits(user_id)
@@ -118,10 +120,10 @@ async def multimodal_generate(
             "task_id": task_id,
             "message": f"Processing started for {len(images)} image(s)",
             "user": {
-                "id": user.id,
-                "email": user.email
+                "id": user["id"],
+                "email": user["email"]
             },
-            "token_refreshed": token_refreshed
+            "token_refreshed": None
         }
         
     except HTTPException as he:
@@ -156,8 +158,8 @@ async def multimodal_debug(
             )
 
         # First validate the access token
-        user, token_refreshed = await validate_access_token(authorization, response)
-
+        # user, token_refreshed = await validate_access_token(authorization, response)
+        user = supabase.table('users').select("*").eq('id', user_id).execute().data[0]
         # Check user's remaining credits
         credits_result = await get_user_credits(user_id)
         if not credits_result["success"]:
@@ -219,10 +221,10 @@ async def multimodal_debug(
             "task_id": task_id,
             "message": f"Processing started for {len(images)} image(s)",
             "user": {
-                "id": user.id,
-                "email": user.email
+                "id": user["id"],
+                "email": user["email"]
             },
-            "token_refreshed": token_refreshed
+            "token_refreshed": None
         }
         
     except HTTPException as he:
@@ -244,13 +246,66 @@ async def generate(
     response: Response = None,
     user_id: str = Form(..., description="User ID of the uploader"),
     user_input = Form(..., description="User Input"),
+    screenshot_count: int = Form(..., description="Number of screenshots"),
     programming_language: str = Form(..., description="programming language of the user input"),
     model: str = Form(..., description="Model to use for the task"),
     speech: str = Form(..., description="Speech of the user input"),
     language: str = Form(..., description="Language of the user input")
 ):
     try:
-        # Validate files parameter
+        # Handle case when screenshot_count is 0 - no images needed
+        if screenshot_count == 0:
+            # Validate that at least user_input or speech is provided
+            if not user_input.strip() and not speech.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Either user_input or speech must be provided when no screenshots are provided"
+                )
+            
+            # First validate the access token
+            # user, token_refreshed = await validate_access_token(authorization, response)
+            user = supabase.table('users').select("*").eq('id', user_id).execute().data[0]
+            
+            # Check user's remaining credits
+            credits_result = await get_user_credits(user_id)
+            if not credits_result["success"]:
+                raise HTTPException(
+                    status_code=404,
+                    detail=credits_result.get("error", "Failed to get user credits")
+                )
+                
+            remaining_credits = credits_result["data"]["remaining_credits"]
+            if remaining_credits <= 0:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Insufficient credits. Please purchase more credits to continue."
+                )
+            
+            # Create async task with empty images list
+            asyncio.create_task(process_generate(
+                task_id=task_id,
+                images=[],  # Empty images list
+                user_id=user_id,
+                user_input=user_input,
+                programming_language=programming_language,
+                model=model,
+                speech=speech,
+                language=language
+            ))
+            
+            # Return task information
+            return {
+                "success": True,
+                "task_id": task_id,
+                "message": "Processing started with no images",
+                "user": {
+                    "id": user["id"],
+                    "email": user["email"]
+                },
+                "token_refreshed": None
+            }
+
+        # Validate files parameter when screenshots are expected
         if not files:
             raise HTTPException(
                 status_code=400,
@@ -265,7 +320,8 @@ async def generate(
             )
 
         # First validate the access token
-        user, token_refreshed = await validate_access_token(authorization, response)
+        # user, token_refreshed = await validate_access_token(authorization, response)
+        user = supabase.table('users').select("*").eq('id', user_id).execute().data[0]
         
         # Check user's remaining credits
         credits_result = await get_user_credits(user_id)
@@ -327,10 +383,10 @@ async def generate(
             "task_id": task_id,
             "message": f"Processing started for {len(images)} image(s)",
             "user": {
-                "id": user.id,
-                "email": user.email
+                "id": user["id"],
+                "email": user["email"]
             },
-            "token_refreshed": token_refreshed
+            "token_refreshed": None
         }
         
     except HTTPException as he:
@@ -365,22 +421,23 @@ async def debug(
             )
 
         # First validate the access token
-        user, token_refreshed = await validate_access_token(authorization, response)
+        # user, token_refreshed = await validate_access_token(authorization, response)
+        user = supabase.table('users').select("*").eq('id', user_id).execute().data[0]
 
-        # # Check user's remaining credits
-        # credits_result = await get_user_credits(user_id)
-        # if not credits_result["success"]:
-        #     raise HTTPException(
-        #         status_code=404,
-        #         detail=credits_result.get("error", "Failed to get user credits")
-        #     )
+        # Check user's remaining credits
+        credits_result = await get_user_credits(user_id)
+        if not credits_result["success"]:
+            raise HTTPException(
+                status_code=404,
+                detail=credits_result.get("error", "Failed to get user credits")
+            )
         
-        # remaining_credits = credits_result["data"]["remaining_credits"]
-        # if remaining_credits <= 0:
-        #     raise HTTPException(
-        #         status_code=403,
-        #         detail="Insufficient credits. Please purchase more credits to continue."
-        #     )
+        remaining_credits = credits_result["data"]["remaining_credits"]
+        if remaining_credits <= 0:
+            raise HTTPException(
+                status_code=403,
+                detail="Insufficient credits. Please purchase more credits to continue."
+            )
         # Prepare images for processing
         images = []
         if files:
@@ -428,10 +485,10 @@ async def debug(
             "task_id": task_id,
             "message": f"Processing started for {len(images)} image(s)",
             "user": {
-                "id": user.id,
-                "email": user.email
+                "id": user["id"],
+                "email": user["email"]
             },
-            "token_refreshed": token_refreshed
+            "token_refreshed": None
         }
         
     except HTTPException as he:

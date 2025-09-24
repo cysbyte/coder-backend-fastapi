@@ -24,6 +24,14 @@ async def process_generate(
     language: str = 'en'
 ):
     try:
+        # Validate that at least user_input or speech is not empty
+        if not images and not user_input.strip() and not speech.strip():
+            await manager.send_message(task_id, {
+                "status": "validation error",
+                "message": "Either user_input or speech must be provided"
+            })
+            return
+
         # Create initial record
         initial_record = {
             "id": task_id,
@@ -32,15 +40,8 @@ async def process_generate(
             "total_images": len(images)
         }
 
-        # Start OCR processing while saving record
-        ocr_start_time = time.time()
-        ocr_task = ocr_parse(images, language)
-        save_task = save_image_record(initial_record)
-        
-        # Wait for both tasks to complete
-        ocr_result, save_result = await asyncio.gather(ocr_task, save_task)
-        ocr_end_time = time.time()
-        ocr_duration = float(f"{ocr_end_time - ocr_start_time:.2f}")
+        # Save record first
+        save_result = await save_image_record(initial_record)
         
         if not save_result["success"]:
             await manager.send_message(task_id, {
@@ -51,13 +52,25 @@ async def process_generate(
 
         record = save_result["data"]
 
-        if not ocr_result["success"]:
-            await manager.send_message(task_id, {
-                "status": "ocr error",
-                "step": "ocr",
-                "message": ocr_result.get("error", "OCR processing failed")
-            })
-            return
+        # Initialize OCR result
+        ocr_result = {"success": True, "texts": []}
+        ocr_duration = 0
+
+        # Only perform OCR if images are provided
+        if images:
+            # Start OCR processing
+            ocr_start_time = time.time()
+            ocr_result = await ocr_parse(images, language)
+            ocr_end_time = time.time()
+            ocr_duration = float(f"{ocr_end_time - ocr_start_time:.2f}")
+            
+            if not ocr_result["success"]:
+                await manager.send_message(task_id, {
+                    "status": "ocr error",
+                    "step": "ocr",
+                    "message": ocr_result.get("error", "OCR processing failed")
+                })
+                return
 
         # Update record with OCR results asynchronously
         update_ocr_task = update_record_status(record["id"], {
@@ -65,15 +78,22 @@ async def process_generate(
             "ocr_service": "google_vision"
         })
 
-        await manager.send_message(task_id, {
-            "status": "ocr completed",
-            "step": "ocr",
-            "message": "OCR analysis completed for all images",
-            "data": {
-                "texts": ocr_result["texts"],
-                "ocr_duration": ocr_duration
-            }
-        })
+        if images:
+            await manager.send_message(task_id, {
+                "status": "ocr completed",
+                "step": "ocr",
+                "message": "OCR analysis completed for all images",
+                "data": {
+                    "texts": ocr_result["texts"],
+                    "ocr_duration": ocr_duration
+                }
+            })
+        else:
+            await manager.send_message(task_id, {
+                "status": "ocr skipped",
+                "step": "ocr",
+                "message": "No images provided, skipping OCR analysis"
+            })
 
         # Start AI processing while OCR update is happening
         ai_start_time = time.time()
@@ -155,41 +175,42 @@ async def process_generate(
                 "message": "Insufficient credits. Please purchase more credits to continue."
             })
 
-        # Upload all images to storage after AI processing and credit update
-        async def upload_single_image(image, index):
-            await manager.send_message(task_id, {
-                "message": f"Uploading image {index + 1} of {len(images)}",
-                "current_image": index + 1,
-                "total_images": len(images)
-            })
-
-            storage_result = await upload_to_storage(
-                file_content=image["content"],
-                file_name=image["filename"],
-                content_type="image/png"    
-            )
-
-            if not storage_result["success"]:
+        # Upload all images to storage after AI processing and credit update (only if images exist)
+        if images:
+            async def upload_single_image(image, index):
                 await manager.send_message(task_id, {
-                    "status": "storage error",
-                    "message": f"Failed to upload image {image['filename']}: {storage_result.get('error', 'Unknown error')}",
+                    "message": f"Uploading image {index + 1} of {len(images)}",
                     "current_image": index + 1,
                     "total_images": len(images)
                 })
-                return None
-            return storage_result
 
-        # Upload images concurrently
-        storage_tasks = [upload_single_image(image, idx) for idx, image in enumerate(images)]
-        storage_results = await asyncio.gather(*storage_tasks)
-        storage_results = [r for r in storage_results if r is not None]
+                storage_result = await upload_to_storage(
+                    file_content=image["content"],
+                    file_name=image["filename"],
+                    content_type="image/png"    
+                )
 
-        if storage_results:
-            # Update record with image URLs and filenames
-            await update_record_status(record["id"], {
-                "image_urls": [result["file_url"] for result in storage_results],
-                "file_names": [image["filename"] for image in images]
-            })
+                if not storage_result["success"]:
+                    await manager.send_message(task_id, {
+                        "status": "storage error",
+                        "message": f"Failed to upload image {image['filename']}: {storage_result.get('error', 'Unknown error')}",
+                        "current_image": index + 1,
+                        "total_images": len(images)
+                    })
+                    return None
+                return storage_result
+
+            # Upload images concurrently
+            storage_tasks = [upload_single_image(image, idx) for idx, image in enumerate(images)]
+            storage_results = await asyncio.gather(*storage_tasks)
+            storage_results = [r for r in storage_results if r is not None]
+
+            if storage_results:
+                # Update record with image URLs and filenames
+                await update_record_status(record["id"], {
+                    "image_urls": [result["file_url"] for result in storage_results],
+                    "file_names": [image["filename"] for image in images]
+                })
 
     except Exception as e:
         await manager.send_message(task_id, {

@@ -191,7 +191,7 @@ async def validate_access_token(
                 
                 if not user or not session_data:
                     print("401err - Failed to silent refresh token")
-                    raise HTTPException(status_code=401, detail="Failed to refresh token")
+                    raise HTTPException(status_code=500, detail="Failed to refresh token")
 
                 # Surface new tokens to the client
                 if response and session_data:
@@ -219,11 +219,11 @@ async def validate_access_token(
                 # Likely refresh token expired/invalid → return specific error for token refresh
                 print("401err - TOKEN_REFRESH_REQUIRED: Refresh token expired or invalid. Please refresh your session.")
                 raise HTTPException(
-                    status_code=401,
+                    status_code=500,
                     detail="TOKEN_REFRESH_REQUIRED: Refresh token expired or invalid. Please refresh your session.",
                 ) from refresh_error
 
     except HTTPException as he:
         raise he
     except Exception as e:
-        raise HTTPException(status_code=401, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))

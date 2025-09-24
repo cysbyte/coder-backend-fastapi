@@ -236,7 +236,7 @@ async def update_user_name(
     """
     try:
         # Validate the access token
-        user, token_refreshed = await validate_access_token(authorization, response)
+        # user, token_refreshed = await validate_access_token(authorization, response)
         
         # Update user data
         result = supabase.table('users').update({
@@ -253,7 +253,7 @@ async def update_user_name(
         return {
             "success": True,
             "data": result.data[0],
-            "token_refreshed": token_refreshed
+            "token_refreshed": None
         }
         
     except HTTPException as he:
@@ -275,7 +275,7 @@ async def delete_user(
     """
     try:
         # Validate the access token
-        user, token_refreshed = await validate_access_token(authorization, response)
+        # user, token_refreshed = await validate_access_token(authorization, response)
         
         # First delete all associated roles
         roles_result = supabase.table('roles').delete().eq('user_id', user_id).execute()
@@ -304,7 +304,7 @@ async def delete_user(
                 "payments_deleted": len(payments_result.data) if payments_result.data else 0,
                 "credits_transactions_deleted": len(credits_transactions_result.data) if credits_transactions_result.data else 0
             },
-            "token_refreshed": token_refreshed
+            "token_refreshed": None
         }
         
     except HTTPException as he:
@@ -397,7 +397,7 @@ async def get_subscription_days(
     """
     try:
         # Validate the access token
-        user, token_refreshed = await validate_access_token(authorization, response)
+        # user, token_refreshed = await validate_access_token(authorization, response)
         
         # Get user's subscription
         subscription_result = supabase.table('subscriptions').select("*").eq('user_id', user_id).eq('status', 'active').execute()
@@ -409,7 +409,7 @@ async def get_subscription_days(
                     "remaining_days": 0,
                     "current_period_end": datetime.now(timezone.utc).isoformat()
                 },
-                "token_refreshed": token_refreshed
+                "token_refreshed": None
             }
             
         subscription = subscription_result.data[0]
@@ -434,7 +434,7 @@ async def get_subscription_days(
                 "remaining_days": max(0, remaining_days),
                 "current_period_end": current_period_end
             },
-            "token_refreshed": token_refreshed
+            "token_refreshed": None
         }
         
     except HTTPException as he:

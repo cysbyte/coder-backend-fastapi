@@ -4,7 +4,7 @@ import asyncio
 from typing import Dict, Any, List
 import aiohttp
 import base64
-from utils.ai import get_system_prompt, get_user_prompt, get_gpt_payload, get_claude_payload
+from utils.ai import get_system_prompt, get_system_prompt_general, get_user_prompt, get_gpt_payload, get_claude_payload
 from services.database_service import get_record_by_task_id, update_record_status
 import json
 from services.websocket_service import manager
@@ -36,8 +36,14 @@ async def generate_with_openai(texts: list[str], user_input: str, programming_la
             f"Text {i+1}:\n{text}" for i, text in enumerate(texts)
         ])
 
+        # Choose appropriate system prompt based on programming language
+        if programming_language.lower().split('-')[0].strip() in ['general', 'no code', 'general/no code']:
+            system_prompt = get_system_prompt_general(language)
+        else:
+            system_prompt = get_system_prompt(language)
+            
         conversation = [
-            {"role": "system", "content": get_system_prompt(language)},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": get_user_prompt('generate', programming_language, combined_text, user_input, speech)}
         ]
         payload = get_gpt_payload(conversation, model)
@@ -292,9 +298,15 @@ async def generate_with_openai_multimodal(ocr_text: str, text: str, images: List
                 "error": "AWS service URL not found in environment variables"
             }
         
+        # Choose appropriate system prompt based on programming language
+        if programming_language.lower() in ['general', 'no code', 'general/no code']:
+            system_prompt = get_system_prompt_general(language)
+        else:
+            system_prompt = get_system_prompt(language)
+            
         # Prepare the conversation with text and images
         conversation = [
-            {"role": "system", "content": get_system_prompt(language)},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user", 
                 "content": [
