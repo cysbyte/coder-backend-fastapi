@@ -199,7 +199,7 @@ async def get_credits(
     """
     try:
         # Validate the access token
-        # user, token_refreshed = await validate_access_token(authorization, response)
+        user, token_refreshed = await validate_access_token(authorization, response)
         
         # Get user credits
         credits_result = await get_user_credits(user_id)
@@ -236,7 +236,7 @@ async def update_user_name(
     """
     try:
         # Validate the access token
-        # user, token_refreshed = await validate_access_token(authorization, response)
+        user, token_refreshed = await validate_access_token(authorization, response)
         
         # Update user data
         result = supabase.table('users').update({
@@ -275,7 +275,7 @@ async def delete_user(
     """
     try:
         # Validate the access token
-        # user, token_refreshed = await validate_access_token(authorization, response)
+        user, token_refreshed = await validate_access_token(authorization, response)
         
         # First delete all associated roles
         roles_result = supabase.table('roles').delete().eq('user_id', user_id).execute()
@@ -397,7 +397,7 @@ async def get_subscription_days(
     """
     try:
         # Validate the access token
-        # user, token_refreshed = await validate_access_token(authorization, response)
+        user, token_refreshed = await validate_access_token(authorization, response)
         
         # Get user's subscription
         subscription_result = supabase.table('subscriptions').select("*").eq('user_id', user_id).eq('status', 'active').execute()

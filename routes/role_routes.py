@@ -30,7 +30,7 @@ async def add_role(
     """
     try:
         # Validate the access token
-        # user, token_refreshed = await validate_access_token(authorization, response)
+        user, token_refreshed = await validate_access_token(authorization, response)
         
         # Prepare role data
         role_data = {
@@ -96,7 +96,7 @@ async def get_roles_by_user(
     """
     try:
         # Validate the access token
-        # user, token_refreshed = await validate_access_token(authorization, response)
+        user, token_refreshed = await validate_access_token(authorization, response)
         
         # Query roles table for the user's 10 most recent roles with retry logic
         result = await select_with_retry('roles', user_id=user_id)
@@ -143,7 +143,7 @@ async def delete_role(
     """
     try:
         # Validate the access token
-        # user, token_refreshed = await validate_access_token(authorization, response)
+        user, token_refreshed = await validate_access_token(authorization, response)
         
         # First check if the role exists with retry logic
         role_result = await select_with_retry('roles', id=role_id)

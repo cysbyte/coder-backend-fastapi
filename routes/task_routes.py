@@ -54,7 +54,7 @@ async def multimodal_generate(
             )
 
         # First validate the access token
-        # user, token_refreshed = await validate_access_token(authorization, response)
+        user, token_refreshed = await validate_access_token(authorization, response)
         user = supabase.table('users').select("*").eq('id', user_id).execute().data[0]
         
         # Check user's remaining credits
@@ -158,7 +158,7 @@ async def multimodal_debug(
             )
 
         # First validate the access token
-        # user, token_refreshed = await validate_access_token(authorization, response)
+        user, token_refreshed = await validate_access_token(authorization, response)
         user = supabase.table('users').select("*").eq('id', user_id).execute().data[0]
         # Check user's remaining credits
         credits_result = await get_user_credits(user_id)
@@ -263,7 +263,7 @@ async def generate(
                 )
             
             # First validate the access token
-            # user, token_refreshed = await validate_access_token(authorization, response)
+            user, token_refreshed = await validate_access_token(authorization, response)
             user = supabase.table('users').select("*").eq('id', user_id).execute().data[0]
             
             # Check user's remaining credits
@@ -320,7 +320,7 @@ async def generate(
             )
 
         # First validate the access token
-        # user, token_refreshed = await validate_access_token(authorization, response)
+        user, token_refreshed = await validate_access_token(authorization, response)
         user = supabase.table('users').select("*").eq('id', user_id).execute().data[0]
         
         # Check user's remaining credits
@@ -421,7 +421,7 @@ async def debug(
             )
 
         # First validate the access token
-        # user, token_refreshed = await validate_access_token(authorization, response)
+        user, token_refreshed = await validate_access_token(authorization, response)
         user = supabase.table('users').select("*").eq('id', user_id).execute().data[0]
 
         # Check user's remaining credits
